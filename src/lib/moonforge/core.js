@@ -159,6 +159,20 @@ export function collectAutoFields() {
   };
 }
 
+// Abort collector requests that hang so slow endpoints can't pin browser
+// connections; callers already treat an AbortError as a failed send.
+const FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function postEvent(payload, { beacon = false } = {}) {
   if (!state.config) return false;
   const url = `${state.config.apiEndpoint}/api/send`;
@@ -178,7 +192,7 @@ export async function postEvent(payload, { beacon = false } = {}) {
     }
   }
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       keepalive: true,
       headers: {
@@ -206,12 +220,15 @@ export async function postEvent(payload, { beacon = false } = {}) {
 export async function postError(body) {
   if (!state.config) return false;
   try {
-    const res = await fetch(`${state.config.apiEndpoint}/api/errors`, {
-      method: "POST",
-      keepalive: true,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const res = await fetchWithTimeout(
+      `${state.config.apiEndpoint}/api/errors`,
+      {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
     debugLog("error", res.status);
     return res.ok;
   } catch (e) {

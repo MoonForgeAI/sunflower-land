@@ -36,7 +36,10 @@ export const MoonForgeAnalytics: {
     data?: Record<string, unknown>,
     opts?: { beacon?: boolean },
   ): Promise<boolean> | undefined;
-  trackScreenView(name: string): Promise<boolean> | undefined;
+  trackScreenView(
+    name: string,
+    opts?: { beacon?: boolean },
+  ): Promise<boolean> | undefined;
   identify(
     userId: string,
     traits?: Record<string, unknown>,
