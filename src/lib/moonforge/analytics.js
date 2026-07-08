@@ -38,18 +38,21 @@ export function trackEvent(name, data = {}, opts = {}) {
     opts,
   );
 }
-export function trackScreenView(name) {
+export function trackScreenView(name, opts = {}) {
   if (!ensure()) return undefined;
   const auto = collectAutoFields();
-  return postEvent({
-    type: "event",
-    payload: {
-      ...auto,
-      name: "screen_view",
-      title: name || auto.title,
-      data: { ...getUserProps(), screen_name: name },
+  return postEvent(
+    {
+      type: "event",
+      payload: {
+        ...auto,
+        name: "screen_view",
+        title: name || auto.title,
+        data: { ...getUserProps(), screen_name: name },
+      },
     },
-  });
+    opts,
+  );
 }
 export function identify(userId, traits = {}) {
   if (!ensure()) return undefined;
