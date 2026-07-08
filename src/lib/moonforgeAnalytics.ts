@@ -56,6 +56,19 @@ export function mfIdentify(
 }
 
 /**
+ * Sets the current player on the error tracker, so captured errors are
+ * attributed to the right account.
+ */
+export function mfSetUser(userId: string, tags?: Record<string, string>): void {
+  try {
+    MoonForgeErrorTracker.setUser(userId, tags);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.log(`MoonForge analytics error: `, e);
+  }
+}
+
+/**
  * Updates the current scene name on the error tracker's game state, so any
  * error captured afterwards is tagged with where the player is.
  */

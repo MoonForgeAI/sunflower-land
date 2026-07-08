@@ -81,7 +81,9 @@ export async function postEvent(payload, { beacon = false } = {}) {
   const url = `${state.config.apiEndpoint}/api/send`;
   const body = JSON.stringify(payload);
   if (beacon && typeof globalThis.navigator?.sendBeacon === 'function') {
-    try { const ok = globalThis.navigator.sendBeacon(url, new Blob([body], { type: 'application/json' })); debugLog('beacon', payload.type, ok); return ok; }
+    // sendBeacon returning false (e.g. queue full) is a soft failure — fall
+    // through to the fetch(keepalive) path so unload-time events still send.
+    try { const ok = globalThis.navigator.sendBeacon(url, new Blob([body], { type: 'application/json' })); debugLog('beacon', payload.type, ok); if (ok) return true; }
     catch (e) { debugLog('beacon failed', e); }
   }
   try {

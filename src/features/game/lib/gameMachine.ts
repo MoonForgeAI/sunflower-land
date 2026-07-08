@@ -74,8 +74,7 @@ import type { AuctionResults } from "./auctionMachine";
 import type { RaffleSnapshotWinner } from "features/world/ui/chapterRaffles/actions/loadRaffleResults";
 import { onboardingAnalytics } from "lib/onboardingAnalytics";
 import { gameAnalytics } from "lib/gameAnalytics";
-import { mfIdentify, mfTrack } from "lib/moonforgeAnalytics";
-import { MoonForgeErrorTracker } from "lib/moonforge";
+import { mfIdentify, mfSetUser, mfTrack } from "lib/moonforgeAnalytics";
 import { portal } from "features/world/ui/community/actions/portal";
 
 import { CONFIG } from "lib/config";
@@ -2732,7 +2731,7 @@ export function startGame(authContext: AuthContext) {
             mfIdentify(`account${event.data.analyticsId}`, {
               farmId: context.farmId,
             });
-            MoonForgeErrorTracker.setUser(`account${event.data.analyticsId}`);
+            mfSetUser(`account${event.data.analyticsId}`);
           }
         },
         assignUrl: (context) => {

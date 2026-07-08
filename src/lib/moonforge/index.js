@@ -55,16 +55,18 @@ function endSpan() {
  * the page is torn down, so total foreground duration stays accurate
  * across repeated tab switches.
  */
+let sessionListenersInstalled = false;
+
 function startSession() {
   beginSpan();
-  if (typeof globalThis.addEventListener === 'function') {
-    globalThis.addEventListener('pagehide', endSpan);
-    globalThis.addEventListener('visibilitychange', () => {
-      const vis = globalThis.document?.visibilityState;
-      if (vis === 'hidden') endSpan();
-      else if (vis === 'visible') beginSpan();
-    });
-  }
+  if (sessionListenersInstalled || typeof globalThis.addEventListener !== 'function') return;
+  sessionListenersInstalled = true;
+  globalThis.addEventListener('pagehide', endSpan);
+  globalThis.addEventListener('visibilitychange', () => {
+    const vis = globalThis.document?.visibilityState;
+    if (vis === 'hidden') endSpan();
+    else if (vis === 'visible') beginSpan();
+  });
 }
 
 function installAutoCapture() {

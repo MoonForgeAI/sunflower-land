@@ -34,6 +34,7 @@ export const MoonForgeAnalytics: {
   trackEvent(
     name: string,
     data?: Record<string, unknown>,
+    opts?: { beacon?: boolean },
   ): Promise<boolean> | undefined;
   trackScreenView(name: string): Promise<boolean> | undefined;
   identify(
@@ -64,10 +65,21 @@ export const MoonForgeErrorTracker: {
       category?: string;
       data?: Record<string, unknown>;
     },
-  ): void;
+  ): {
+    type: BreadcrumbTypeValue;
+    level: BreadcrumbLevelValue;
+    message: string;
+    category?: string;
+    data?: Record<string, unknown>;
+    timestamp: number;
+  };
   captureException(
     error: unknown,
-    options?: { level?: ErrorLevelValue; tags?: Record<string, string> },
+    options?: {
+      level?: ErrorLevelValue;
+      tags?: Record<string, string>;
+      category?: "handled" | "unhandled";
+    },
   ): Promise<boolean> | false | undefined;
   captureMessage(
     message: string,
