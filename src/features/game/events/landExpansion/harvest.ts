@@ -63,6 +63,7 @@ import {
 import { isBuffActive } from "features/game/types/buffs";
 import { prngChance } from "lib/prng";
 import { KNOWN_IDS } from "features/game/types";
+import { mfTrack } from "lib/moonforgeAnalytics";
 export type LandExpansionHarvestAction = {
   type: "crop.harvested";
   index: string;
@@ -1127,6 +1128,8 @@ export function harvest({
       boostNames: boostsUsed,
       createdAt,
     });
+
+    mfTrack("crop_harvested", { crop_type: cropName, amount });
 
     return stateCopy;
   });

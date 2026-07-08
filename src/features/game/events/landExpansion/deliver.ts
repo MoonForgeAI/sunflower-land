@@ -39,6 +39,7 @@ import { getCountAndType } from "features/island/hud/components/inventory/utils/
 import { getChapterTaskPoints } from "features/game/types/tracks";
 import { handleChapterAnalytics } from "features/game/lib/trackAnalytics";
 import { hasTimeBasedFeatureAccess } from "lib/flags";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export const TICKET_REWARDS: Record<QuestNPCName, number> = {
   "pumpkin' pete": 1,
@@ -648,6 +649,12 @@ export function deliverOrder({
 
     // Mark as complete
     order.completedAt = Date.now();
+
+    mfTrack("delivery_completed", {
+      npc_id: order.from,
+      reward_coins: order.reward.coins ?? 0,
+      reward_tickets: ticketsToAward,
+    });
 
     return game;
   });

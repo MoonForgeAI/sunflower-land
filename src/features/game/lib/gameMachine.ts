@@ -74,6 +74,8 @@ import type { AuctionResults } from "./auctionMachine";
 import type { RaffleSnapshotWinner } from "features/world/ui/chapterRaffles/actions/loadRaffleResults";
 import { onboardingAnalytics } from "lib/onboardingAnalytics";
 import { gameAnalytics } from "lib/gameAnalytics";
+import { mfIdentify, mfTrack } from "lib/moonforgeAnalytics";
+import { MoonForgeErrorTracker } from "lib/moonforge";
 import { portal } from "features/world/ui/community/actions/portal";
 
 import { CONFIG } from "lib/config";
@@ -601,8 +603,7 @@ const EFFECT_STATES = Object.values(STATE_MACHINE_EFFECTS).reduce(
               if (stateName !== "claimingAuctionRaffle") return false;
               if (event.data.state.transaction) return false;
               const prize = event.data.effect?.prize as
-                | RaffleSnapshotWinner
-                | undefined;
+                RaffleSnapshotWinner | undefined;
               if (!prize?.onChain) return false;
               return !!prize;
             },
@@ -2325,6 +2326,14 @@ export function startGame(authContext: AuthContext) {
                 pricePerUnit,
               });
 
+              if (!error) {
+                mfTrack("marketplace_trade", {
+                  item_id: item,
+                  price_sfl: pricePerUnit,
+                  side: "sell",
+                });
+              }
+
               return {
                 farm,
                 error,
@@ -2720,6 +2729,10 @@ export function startGame(authContext: AuthContext) {
               id: context.farmId,
             });
             onboardingAnalytics.logEvent("login");
+            mfIdentify(`account${event.data.analyticsId}`, {
+              farmId: context.farmId,
+            });
+            MoonForgeErrorTracker.setUser(`account${event.data.analyticsId}`);
           }
         },
         assignUrl: (context) => {
