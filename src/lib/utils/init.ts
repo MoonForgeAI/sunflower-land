@@ -11,6 +11,11 @@ let moonForgeInitialised = false;
 
 function initMoonForge() {
   if (moonForgeInitialised) return;
+
+  // Not configured (e.g. local dev without VITE_MOONFORGE_GAME_ID) — skip,
+  // matching how the other analytics integrations behave without their keys.
+  if (!MOONFORGE_GAME_ID) return;
+
   moonForgeInitialised = true;
 
   try {

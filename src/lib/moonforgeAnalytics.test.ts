@@ -1,11 +1,12 @@
 import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
 import {
-  MOONFORGE_GAME_ID,
   mfIdentify,
   mfScreen,
   mfSetScene,
   mfTrack,
 } from "./moonforgeAnalytics";
+
+const TEST_GAME_ID = "00000000-0000-4000-8000-000000000000";
 
 describe("moonforgeAnalytics", () => {
   let fetchMock: jest.Mock;
@@ -41,7 +42,7 @@ describe("moonforgeAnalytics", () => {
   describe("after the SDK is initialised", () => {
     beforeAll(() => {
       MoonForgeAnalytics.init({
-        gameId: MOONFORGE_GAME_ID,
+        gameId: TEST_GAME_ID,
         autoTrackSession: false,
       });
     });
@@ -55,7 +56,7 @@ describe("moonforgeAnalytics", () => {
 
       const body = JSON.parse((init as { body: string }).body);
       expect(body.type).toBe("event");
-      expect(body.payload.game).toBe(MOONFORGE_GAME_ID);
+      expect(body.payload.game).toBe(TEST_GAME_ID);
       expect(body.payload.name).toBe("crop_harvested");
       expect(body.payload.data).toMatchObject({
         crop_type: "Sunflower",

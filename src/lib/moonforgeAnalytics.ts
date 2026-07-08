@@ -1,4 +1,5 @@
 import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
+import { CONFIG } from "lib/config";
 
 /**
  * MoonForge game analytics for Sunflower Land.
@@ -8,10 +9,11 @@ import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
  * extend the underlying analytics provider.
  *
  * The SDK itself is a safe no-op before `MoonForgeAnalytics.init` has run
- * (e.g. during SSR/build or before app bootstrap completes), so these
- * helpers do not need their own guards.
+ * (e.g. during SSR/build, before app bootstrap completes, or when
+ * VITE_MOONFORGE_GAME_ID is not configured), so these helpers do not need
+ * their own guards.
  */
-export const MOONFORGE_GAME_ID = "a1c35b7b-049b-4662-8a6c-2b0476080671";
+export const MOONFORGE_GAME_ID = CONFIG.MOONFORGE_GAME_ID;
 
 /**
  * Tracks a one-off game event with optional properties.
