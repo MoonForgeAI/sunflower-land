@@ -64,6 +64,7 @@ import {
 import { isBuffActive } from "features/game/types/buffs";
 import { isAutumnCrop, isSummerCrop } from "./harvest";
 import { getKeys } from "lib/object";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type LandExpansionPlantAction = {
   type: "seed.planted";
@@ -724,6 +725,8 @@ export function plant({
       boostNames: boostsUsed,
       createdAt,
     });
+
+    mfTrack("crop_planted", { crop_type: cropName });
 
     return stateCopy;
   });

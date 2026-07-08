@@ -38,6 +38,7 @@ import { produce } from "immer";
 import { STONE_RECOVERY_TIME } from "features/game/lib/constants";
 import { hasFeatureAccess } from "lib/flags";
 import { canMine, getMineReadyAt } from "features/game/lib/resourceNodes";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type LandExpansionStoneMineAction = {
   type: "stoneRock.mined";
@@ -505,6 +506,11 @@ export function mineStone({
       ],
       createdAt,
     });
+    mfTrack("resource_collected", {
+      resource_type: stoneName,
+      amount: stoneMined.toNumber(),
+    });
+
     delete rock.stone.amount;
     delete rock.stone.criticalHit;
 

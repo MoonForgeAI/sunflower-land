@@ -17,6 +17,7 @@ import {
 } from "features/game/lib/boostWindows";
 import { getReadyAt } from "./startComposter";
 import type { Coordinates } from "features/game/expansion/components/MapPlacement";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export enum PLACE_BUILDING_ERRORS {
   NO_BUMPKIN = "You do not have a Bumpkin!",
@@ -239,6 +240,8 @@ export function placeBuilding({
 
       delete existingBuilding.removedAt;
 
+      mfTrack("building_placed", { building_type: action.name });
+
       return stateCopy;
     }
 
@@ -248,6 +251,8 @@ export function placeBuilding({
       coordinates: action.coordinates,
       readyAt: createdAt,
     };
+
+    mfTrack("building_placed", { building_type: action.name });
 
     return {
       ...stateCopy,
