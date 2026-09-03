@@ -1,8 +1,10 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { GRID_WIDTH_PX, PIXEL_SCALE } from "features/game/lib/constants";
 import type { MachineState } from "features/game/lib/gameMachine";
 import { Context } from "features/game/GameProvider";
 import { useInterpret, useSelector } from "@xstate/react";
+import { useNow } from "lib/utils/hooks/useNow";
+import { PRE_ACTION_TICK_MS } from "features/game/lib/timerDisplay";
 import { capitalize } from "lib/utils/capitalize";
 import {
   animalMachine,
@@ -15,6 +17,7 @@ import {
   getAnimalLevel,
   getBoostedFoodQuantity,
   isAnimalFood,
+  resolveAnimal,
 } from "features/game/lib/animals";
 import { SUNNYSIDE } from "assets/sunnyside";
 import classNames from "classnames";
@@ -102,10 +105,19 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
   id,
   disabled,
 }) => {
+  // The Collie Shrine's -5% feed cost only applies while the shrine is active,
+  // so the required-food display needs a LIVE clock — a mount snapshot would
+  // keep showing the discount after the shrine expired. One tick a minute is
+  // enough for a boost that flips at most a few times a day.
+  const now = useNow({ live: true, intervalMs: PRE_ACTION_TICK_MS });
   const { gameService, selectedItem, shortcutItem } = useContext(Context);
 
-  const cow = useSelector(gameService, _cow(id));
+  const storedCow = useSelector(gameService, _cow(id));
   const game = useSelector(gameService, _game);
+  // The animal machine has no access to game state, so every consumer below —
+  // the machine included — is handed the animal with its live windowed wake time
+  // substituted in. Read-only: nothing here writes an animal back.
+  const cow = useMemo(() => resolveAnimal(storedCow, game), [storedCow, game]);
   const cowService = useInterpret(animalMachine, {
     context: {
       animal: cow,
@@ -227,6 +239,7 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
     foodQuantity: REQUIRED_FOOD_QTY.Cow,
     game,
     animal: cow,
+    now,
   });
 
   const hasGoldenCow = isAnimalCoveredByGoldenAsset({
@@ -252,7 +265,13 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
     setShowFeedXP(true);
     setTimeout(() => setShowFeedXP(false), 700);
 
-    const updatedCow = updatedState.context.state.barn.animals[id];
+    // Resolve before handing it to the machine: the raw record carries the
+    // stale cached `awakeAt`, and the machine's sleep guard has no game state
+    // of its own to re-derive from.
+    const updatedCow = resolveAnimal(
+      updatedState.context.state.barn.animals[id],
+      updatedState.context.state,
+    );
 
     cowService.send({
       type: "FEED",
@@ -283,7 +302,13 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
     setShowLoveItem(item as LoveAnimalItem);
     setTimeout(() => setShowLoveItem(undefined), 700);
 
-    const updatedCow = updatedState.context.state.barn.animals[id];
+    // Resolve before handing it to the machine: the raw record carries the
+    // stale cached `awakeAt`, and the machine's sleep guard has no game state
+    // of its own to re-derive from.
+    const updatedCow = resolveAnimal(
+      updatedState.context.state.barn.animals[id],
+      updatedState.context.state,
+    );
 
     cowService.send({
       type: "LOVE",
@@ -300,7 +325,13 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
       id: cow.id,
     });
 
-    const updatedCow = updatedState.context.state.barn.animals[id];
+    // Resolve before handing it to the machine: the raw record carries the
+    // stale cached `awakeAt`, and the machine's sleep guard has no game state
+    // of its own to re-derive from.
+    const updatedCow = resolveAnimal(
+      updatedState.context.state.barn.animals[id],
+      updatedState.context.state,
+    );
 
     cowService.send({
       type: "CLAIM_PRODUCE",
@@ -316,7 +347,13 @@ export const Cow: React.FC<{ id: string; disabled: boolean }> = ({
       id: cow.id,
     });
 
-    const updatedCow = updatedState.context.state.barn.animals[id];
+    // Resolve before handing it to the machine: the raw record carries the
+    // stale cached `awakeAt`, and the machine's sleep guard has no game state
+    // of its own to re-derive from.
+    const updatedCow = resolveAnimal(
+      updatedState.context.state.barn.animals[id],
+      updatedState.context.state,
+    );
 
     cowService.send({
       type: "CURE",

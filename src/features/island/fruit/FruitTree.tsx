@@ -1,7 +1,6 @@
 import React, { useContext, useMemo } from "react";
 
 import type { FruitFertiliser, PlantedFruit } from "features/game/types/game";
-import { useNow } from "lib/utils/hooks/useNow";
 import { PATCH_FRUIT_SEEDS, PATCH_FRUIT } from "features/game/types/fruits";
 import { FruitSoil } from "./FruitSoil";
 
@@ -15,12 +14,13 @@ import { useSelector } from "@xstate/react";
 import { Context } from "features/game/GameProvider";
 import {
   computeReadyAt,
-  getEffectiveSpeedAt,
+  areBoostWindowsEqual,
   getFruitBoostWindows,
   getTurbofruitMixWindows,
   workAccruedAt,
   type BoostWindow,
 } from "features/game/lib/boostWindows";
+import { useNodeTimer } from "features/game/lib/useNodeTimer";
 
 type Stage = "Empty" | "Seedling" | "Replenishing" | "Replenished" | "Dead";
 
@@ -103,20 +103,6 @@ interface Props {
 
 const _island = (state: MachineState) => state.context.state.island;
 
-// Field comparator for the fruit boost windows so the selector skips re-renders
-// without allocating JSON strings per patch on every service update.
-const areBoostWindowsEqual = (a: BoostWindow[], b: BoostWindow[]) =>
-  a.length === b.length &&
-  a.every((window, index) => {
-    const other = b[index];
-    return (
-      other !== undefined &&
-      window.from === other.from &&
-      window.to === other.to &&
-      window.speed === other.speed
-    );
-  });
-
 export const FruitTree: React.FC<Props> = ({
   plantedFruit,
   fertiliser,
@@ -166,19 +152,15 @@ export const FruitTree: React.FC<Props> = ({
         })
       : startedAt + plantSeconds * 1000;
 
-  // Coarse 1s clock to pick the current boost speed; only windowed fruit are
-  // boosted. Tick the countdown faster (1000/speed) so it drops ~1s per visual
-  // tick rather than jumping by `speed` each real second.
-  const tickNow = useNow({
-    live: isGrowing && baseDurationMs !== undefined,
-    autoEndAt: readyAt,
+  const { now, speed, displaySeconds } = useNodeTimer({
+    startedAt,
+    baseDurationMs,
+    windows: fruitBoostWindows,
+    legacyReadyAt: readyAt ?? 0,
+    live: isGrowing,
   });
-  const speed =
-    baseDurationMs !== undefined
-      ? getEffectiveSpeedAt({ at: tickNow, windows: fruitBoostWindows })
-      : 1;
-  const intervalMs = Math.max(Math.round(1000 / Math.max(speed, 1)), 250);
-  const now = useNow({ live: isGrowing, autoEndAt: readyAt, intervalMs });
+  // `timeLeft` here is the remaining WORK — it drives the progress bar and the
+  // stage, neither of which may move when the player switches reading.
   const treeStatus = getFruitTreeStatus(plantedFruit, now, fruitBoostWindows);
 
   // Empty plot
@@ -208,7 +190,8 @@ export const FruitTree: React.FC<Props> = ({
         <FruitSeedling
           island={island}
           patchFruitName={name}
-          timeLeft={treeStatus.timeLeft}
+          timeLeft={displaySeconds}
+          workLeftSeconds={treeStatus.timeLeft}
           totalSeconds={treeStatus.totalSeconds}
           speed={speed}
         />
@@ -223,7 +206,8 @@ export const FruitTree: React.FC<Props> = ({
         <ReplenishingTree
           island={island}
           patchFruitName={name}
-          timeLeft={treeStatus.timeLeft}
+          timeLeft={displaySeconds}
+          workLeftSeconds={treeStatus.timeLeft}
           totalSeconds={treeStatus.totalSeconds}
           speed={speed}
           playShakeAnimation={playShakingAnimation}

@@ -11,27 +11,26 @@ import {
 } from "features/game/types/fruits";
 import { PATCH_FRUIT_LIFECYCLE } from "./fruits";
 import classNames from "classnames";
-import { ITEM_DETAILS } from "features/game/types/images";
+import {
+  ITEM_DETAILS,
+  getTranslatedItemName,
+} from "features/game/types/images";
 import type { GameState } from "features/game/types/game";
 import { getCurrentBiome } from "../biomes/biomes";
 import { SUNNYSIDE } from "assets/sunnyside";
-
-const pluralisedNames: Record<PatchFruitName, string> = {
-  Orange: "Oranges",
-  Blueberry: "Blueberries",
-  Apple: "Apples",
-  Banana: "Bananas",
-  Tomato: "Tomatoes",
-  Lemon: "Lemons",
-  Celestine: "Celestines",
-  Lunara: "Lunara",
-  Duskberry: "Duskberries",
-};
+import { useAppTranslation } from "lib/i18n/useAppTranslations";
 
 interface Props {
   patchFruitName: PatchFruitName;
   island: GameState["island"];
+  /** The reading to display, per the player's timer setting. */
   timeLeft: number;
+  /**
+   * Remaining WORK in seconds — how grown the fruit actually is. Drives the
+   * progress bar, which must not move when the player switches which reading the
+   * label shows. Falls back to `timeLeft` (identical when unboosted).
+   */
+  workLeftSeconds?: number;
   /** Cycle length (s) — progress denominator; defaults to base plant time. */
   totalSeconds?: number;
   /** Current effective grow speed; shows a lightning when > 1. */
@@ -43,11 +42,13 @@ export const ReplenishingTree: React.FC<Props> = ({
   island,
   patchFruitName,
   timeLeft,
+  workLeftSeconds,
   totalSeconds,
   speed,
   playShakeAnimation,
 }) => {
   const { showTimers } = useContext(Context);
+  const { t } = useAppTranslation();
   const [showPopover, setShowPopover] = useState(false);
   const biome = getCurrentBiome(island);
   const lifecycle = PATCH_FRUIT_LIFECYCLE[biome][patchFruitName];
@@ -88,7 +89,9 @@ export const ReplenishingTree: React.FC<Props> = ({
   const cycleSeconds = totalSeconds ?? plantSeconds;
   const isBoosted = speed !== undefined && speed > 1;
   const replenishPercentage =
-    cycleSeconds > 0 ? 100 - (timeLeft / cycleSeconds) * 100 : 0;
+    cycleSeconds > 0
+      ? 100 - ((workLeftSeconds ?? timeLeft) / cycleSeconds) * 100
+      : 0;
 
   return (
     <div
@@ -153,7 +156,9 @@ export const ReplenishingTree: React.FC<Props> = ({
         <TimerPopover
           showPopover={showPopover}
           image={ITEM_DETAILS[patchFruitName].image}
-          description={`${pluralisedNames[patchFruitName]} Replenishing`}
+          description={t("fruitPatch.replenishing", {
+            name: getTranslatedItemName(patchFruitName),
+          })}
           timeLeft={timeLeft}
           speed={speed}
         />

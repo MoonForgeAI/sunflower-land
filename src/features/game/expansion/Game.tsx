@@ -22,6 +22,7 @@ import { ToastPanel } from "../toast/ToastPanel";
 import { Panel } from "components/ui/Panel";
 
 import { Swarming } from "../components/Swarming";
+import { Captcha } from "../components/captcha/Captcha";
 import { Cooldown } from "../components/Cooldown";
 import { Route, Routes } from "react-router";
 import { Land } from "./Land";
@@ -90,13 +91,13 @@ import {
 import { LoveCharm } from "./components/LoveCharm";
 import { ClaimReferralRewards } from "./components/ClaimReferralRewards";
 import { ReferralsAnnouncement } from "./components/ReferralsAnnouncement";
+import { TermsAndConditions } from "./components/TermsAndConditions";
 import { SoftBan } from "features/retreat/components/personhood/SoftBan";
 import { RewardBox } from "features/rewardBoxes/RewardBox";
 import { SystemMessageWidget } from "features/announcements/SystemMessageWidget";
 import { TradesCleared } from "./components/TradesCleared";
 import { RevealPet } from "features/island/pets/RevealPet";
 import { OnChainRaffleRewardModal } from "./components/OnChainRaffleRewardModal";
-import { LeagueResults } from "./components/LeagueResults";
 import { MigrateToLinkedWallet } from "./components/MigrateToLinkedWallet";
 import { DailyRewardClaim } from "../components/DailyReward";
 
@@ -185,6 +186,10 @@ const SHOW_MODAL: Record<StateValues, boolean> = {
   linkingWallet: false,
   linkingWalletSuccess: false,
   linkingWalletFailed: false,
+  // Unlinking a social account is handled inline in the settings panel.
+  unlinkingSocial: false,
+  unlinkingSocialSuccess: false,
+  unlinkingSocialFailed: false,
   // Showcasing / removing a tweet is handled inline in the mailbox Community tab.
   showcasingTwitter: false,
   showcasingTwitterSuccess: false,
@@ -219,6 +224,7 @@ const SHOW_MODAL: Record<StateValues, boolean> = {
   depositing: true,
   introduction: false,
   welcome: true,
+  termsAndConditions: true,
   vip: true,
   transacting: true,
   auctionResults: false,
@@ -242,14 +248,16 @@ const SHOW_MODAL: Record<StateValues, boolean> = {
   dailyResetting: false,
   jinAirdrop: true,
   investigating: true,
-  leagueResults: false,
   linkWallet: true,
   dailyReward: true,
   starterOffer: true,
+  captcha: true,
 };
 
 // State change selectors
 const isWelcome = (state: MachineState) => state.matches("welcome");
+const isTermsAndConditions = (state: MachineState) =>
+  state.matches("termsAndConditions");
 const isLoading = (state: MachineState) =>
   state.matches("loading") || state.matches("portalling");
 const isPortalling = (state: MachineState) => state.matches("portalling");
@@ -270,6 +278,7 @@ const isRefreshing = (state: MachineState) => state.matches("refreshing");
 const isBuyingSFL = (state: MachineState) => state.matches("buyingSFL");
 const isError = (state: MachineState) => state.matches("error");
 const isSwarming = (state: MachineState) => state.matches("swarming");
+const isCaptcha = (state: MachineState) => state.matches("captcha");
 const isPurchasing = (state: MachineState) =>
   state.matches("purchasing") || state.matches("buyingBlockBucks");
 
@@ -299,6 +308,7 @@ const isRefundingAuction = (state: MachineState) =>
 const isPromoing = (state: MachineState) => state.matches("promo");
 const isBlacklisted = (state: MachineState) => state.matches("blacklisted");
 const getBanReason = (state: MachineState) => state.context.banReason;
+const getBanMessage = (state: MachineState) => state.context.banMessage;
 const hasAirdrop = (state: MachineState) => state.matches("airdrop");
 const isOnChainRaffleAcknowledgment = (state: MachineState) =>
   state.matches("onChainRaffleAcknowledgment");
@@ -333,8 +343,6 @@ const isRoninMigration = (state: MachineState) =>
   state.matches("roninMigration");
 const _isVisiting = (state: MachineState) =>
   state.context.visitorId !== undefined;
-const isLeagueResultsReleased = (state: MachineState) =>
-  state.matches("leagueResults");
 
 const GameContent: React.FC = () => {
   const { gameService } = useContext(Context);
@@ -468,6 +476,7 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
 
   const loading = useSelector(gameService, isLoading);
   const welcome = useSelector(gameService, isWelcome);
+  const termsAndConditions = useSelector(gameService, isTermsAndConditions);
   const portalling = useSelector(gameService, isPortalling);
   const trading = useSelector(gameService, isTrading);
   const traded = useSelector(gameService, isTraded);
@@ -486,6 +495,7 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
   const error = useSelector(gameService, isError);
   const purchasing = useSelector(gameService, isPurchasing);
   const swarming = useSelector(gameService, isSwarming);
+  const captcha = useSelector(gameService, isCaptcha);
   const coolingDown = useSelector(gameService, isCoolingDown);
   const depositing = useSelector(gameService, isDepositing);
   const loadingLandToVisit = useSelector(gameService, isLoadingLandToVisit);
@@ -499,6 +509,7 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
   const promo = useSelector(gameService, isPromoing);
   const blacklisted = useSelector(gameService, isBlacklisted);
   const banReason = useSelector(gameService, getBanReason);
+  const banMessage = useSelector(gameService, getBanMessage);
   const airdrop = useSelector(gameService, hasAirdrop);
   const onChainRaffleAcknowledgment = useSelector(
     gameService,
@@ -528,10 +539,6 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
   const linkWallet = useSelector(gameService, isLinkWallet);
   const tradesCleared = useSelector(gameService, isTradesCleared);
   const isVisiting = useSelector(gameService, _isVisiting);
-  const leagueResultsReleased = useSelector(
-    gameService,
-    isLeagueResultsReleased,
-  );
   const dailyReward = useSelector(gameService, isDailyReward);
   const starterOffer = useSelector(gameService, isStarterOffer);
   const roninMigration = useSelector(gameService, isRoninMigration);
@@ -649,7 +656,7 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
       <Ocean>
         <Modal show backdrop={false}>
           <Panel>
-            <Blacklisted banReason={banReason} />
+            <Blacklisted banReason={banReason} banMessage={banMessage} />
           </Panel>
         </Modal>
       </Ocean>
@@ -711,10 +718,12 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
             {error && <ErrorMessage errorCode={errorCode as ErrorCode} />}
             {purchasing && <Purchasing />}
             {swarming && <Swarming />}
+            {captcha && <Captcha />}
             {coolingDown && <Cooldown />}
             {dailyReward && <DailyRewardClaim showClose />}
             {transacting && <Transaction />}
             {welcome && <Welcome />}
+            {termsAndConditions && <TermsAndConditions />}
             {depositing && <Loading text={t("depositing")} />}
             {trading && <Loading text={t("trading")} />}
             {traded && <Traded />}
@@ -757,15 +766,6 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
               competitionName="BUILDING_FRIENDSHIPS"
               onClose={() => gameService.send("ACKNOWLEDGE")}
             />
-          </Modal>
-        )}
-        {leagueResultsReleased && !isVisiting && (
-          <Modal show>
-            <Panel
-              bumpkinParts={error ? NPC_WEARABLES["worried pete"] : undefined}
-            >
-              <LeagueResults />
-            </Panel>
           </Modal>
         )}
         <Introduction />

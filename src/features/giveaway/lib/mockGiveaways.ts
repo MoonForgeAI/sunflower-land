@@ -4,6 +4,7 @@ import type {
   PrizeTier,
 } from "./types";
 import { TRIVIA_GAME_MS } from "./trivia";
+import { POP_GAME_MS } from "./pop";
 
 /**
  * Offline/UI mode fixtures. When `CONFIG.API_URL` is unset there's no backend to
@@ -15,12 +16,22 @@ import { TRIVIA_GAME_MS } from "./trivia";
 /** Short lobby so you see the countdown, then the race auto-starts. */
 const LOBBY_MS = 2000;
 const DURATION_MS = 5 * 60 * 1000;
-/** Lobby + longest possible game (trivia runs longest); after this a cycle is
- * considered finished and the board re-anchors for a fresh countdown. */
-const RACE_WINDOW_MS = LOBBY_MS + Math.max(30000, TRIVIA_GAME_MS) + 5000;
+/** Lobby + the longest game on offer; after this a cycle is considered
+ * finished and the board re-anchors for a fresh countdown. */
+const RACE_WINDOW_MS =
+  LOBBY_MS + Math.max(30000, TRIVIA_GAME_MS, POP_GAME_MS) + 5000;
 
 export const MOCK_GIVEAWAY_ID = "local-race";
 export const MOCK_PAST_GIVEAWAY_ID = "local-race-past";
+
+/**
+ * The active mock giveaway's id. Minigames seed themselves off the giveaway id
+ * (trivia questions, pop bots, race bots), so a fixed id meant every offline
+ * playthrough replayed the identical game. Stamping the anchored start time
+ * into the id gives each race cycle a fresh seed while staying stable across
+ * polls within one cycle — which is what determinism actually requires.
+ */
+export const mockGiveawayId = () => `${MOCK_GIVEAWAY_ID}-${startAt()}`;
 
 // Start time is anchored in module scope so it's STABLE across polls (otherwise
 // every re-fetch would push the start forward and it'd never begin). It re-
@@ -47,7 +58,7 @@ export function mockGiveaways(): GiveawaysResponse {
   return {
     active: [
       {
-        id: MOCK_GIVEAWAY_ID,
+        id: mockGiveawayId(),
         title: "Local Test Race",
         description: "Offline mock giveaway — just you on the track.",
         status: Date.now() >= s ? "live" : "upcoming",

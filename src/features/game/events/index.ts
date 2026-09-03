@@ -32,6 +32,10 @@ import {
 import type { GameState } from "../types/game";
 import { claimAirdrop, type ClaimAirdropAction } from "./claimAirdrop";
 import {
+  airdropFlower,
+  type AirdropFlowerAction,
+} from "./landExpansion/airdropFlower";
+import {
   placeBuilding,
   type PlaceBuildingAction,
 } from "./landExpansion/placeBuilding";
@@ -541,6 +545,10 @@ import {
   acknowledgeCalendarEvent,
   type AcknowledgeCalendarEventAction,
 } from "./landExpansion/acknowledgeCalendarEvent";
+import {
+  acknowledgeTcs,
+  type AcknowledgeTcsAction,
+} from "./landExpansion/acknowledgeTcs";
 
 import {
   collectLavaPit,
@@ -639,6 +647,10 @@ import {
   type ClaimPetalPrizeAction,
 } from "./landExpansion/claimPetalPrize";
 import {
+  claimFloatingIslandPrize,
+  type ClaimFloatingIslandPrizeAction,
+} from "./landExpansion/claimFloatingIslandPrize";
+import {
   buyOptionPurchaseItem,
   type BuyOptionPurchaseItemAction,
 } from "../types/buyOptionPurchaseItem";
@@ -693,23 +705,6 @@ import {
   type RemoveBeehiveAction,
 } from "./landExpansion/removeBeehive";
 import { removeAll, type RemoveAllAction } from "./landExpansion/removeAll";
-import { saveLayout, type SaveLayoutAction } from "./landExpansion/saveLayout";
-import {
-  applyLayout,
-  type ApplyLayoutAction,
-} from "./landExpansion/applyLayout";
-import {
-  renameLayout,
-  type RenameLayoutAction,
-} from "./landExpansion/renameLayout";
-import {
-  deleteLayout,
-  type DeleteLayoutAction,
-} from "./landExpansion/deleteLayout";
-import {
-  saveAscensionLayout,
-  type SaveAscensionLayoutAction,
-} from "./landExpansion/saveAscensionLayout";
 import {
   wakeAnimal,
   type WakeUpAnimalAction,
@@ -793,6 +788,10 @@ import {
   renewCollectible,
   type RenewCollectibleAction,
 } from "./landExpansion/renewCollectible";
+import {
+  extendCollectible,
+  type ExtendCollectibleAction,
+} from "./landExpansion/extendCollectible";
 import {
   renewWeatherCollectible,
   type RenewWeatherCollectibleAction,
@@ -880,6 +879,7 @@ export type PlayingEvent =
   | MineSunstoneAction
   | MineAscensionCrystalAction
   | ClaimAirdropAction
+  | AirdropFlowerAction
   | RecipeCookedAction
   | CollectRecipeAction
   | CancelProcessedResourceAction
@@ -992,6 +992,7 @@ export type PlayingEvent =
   | RedeemTradeRewardsAction
   | DailyResetAction
   | AcknowledgeCalendarEventAction
+  | AcknowledgeTcsAction
   | CollectLavaPitAction
   | StartLavaPitAction
   | HarvestSaltAction
@@ -1009,6 +1010,7 @@ export type PlayingEvent =
   | AcknowledgeRewardBoxAction
   | OpenRewardBoxAction
   | ClaimPetalPrizeAction
+  | ClaimFloatingIslandPrizeAction
   | BuyOptionPurchaseItemAction
   | InstantCraftAction
   | BuyBiomeAction
@@ -1027,6 +1029,7 @@ export type PlayingEvent =
   | BulkFertilisePlotAction
   | RenewPetShrineAction
   | RenewCollectibleAction
+  | ExtendCollectibleAction
   | RenewWeatherCollectibleAction
   | CollectWaterTrapAction
   | PlaceWaterTrapAction
@@ -1105,11 +1108,6 @@ export type PlacementEvent =
   | RemoveFlowerBedAction
   | RemoveBeehiveAction
   | RemoveAllAction
-  | SaveLayoutAction
-  | SaveAscensionLayoutAction
-  | ApplyLayoutAction
-  | RenameLayoutAction
-  | DeleteLayoutAction
   | FlipCollectibleAction
   | FlipFarmHandAction
   | FlipBumpkinAction
@@ -1173,6 +1171,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "minigame.attemptStarted": startMinigameAttempt,
   "minigame.scoreSubmitted": submitMinigameScore,
   "airdrop.claimed": claimAirdrop,
+  "flower.airdropped": airdropFlower,
   "bot.detected": detectBot,
   "seed.planted": landExpansionPlant,
   "seeds.bulkPlanted": bulkPlant,
@@ -1243,6 +1242,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "land.revealed": revealLand,
   "collectible.burned": burnCollectible,
   "collectible.renewed": renewCollectible,
+  "collectible.extended": extendCollectible,
   "weatherCollectible.renewed": renewWeatherCollectible,
   "bonus.claimed": claimBonus,
   "dailyReward.claimed": claimDailyReward,
@@ -1298,6 +1298,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "reward.redeemed": redeemTradeReward,
   "daily.reset": dailyReset,
   "calendarEvent.acknowledged": acknowledgeCalendarEvent,
+  "tcs.acknowledged": acknowledgeTcs,
   "lavaPit.collected": collectLavaPit,
   "lavaPit.started": startLavaPit,
   "salt.harvested": harvestSalt,
@@ -1317,6 +1318,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "rewardBox.opened": openRewardBox,
   "claim.bountyBoardBonus": claimBountyBonus,
   "petalPuzzle.solved": claimPetalPrize,
+  "floatingIslandPrize.claimed": claimFloatingIslandPrize,
   "optionPurchaseItem.bought": buyOptionPurchaseItem,
   "crafting.spedUp": speedUpCrafting,
   "biome.bought": buyBiome,
@@ -1418,11 +1420,6 @@ export const PLACEMENT_EVENTS: Handlers<PlacementEvent> = {
   "flowerBed.removed": removeFlowerBed,
   "beehive.removed": removeBeehive,
   "items.removed": removeAll,
-  "layout.saved": saveLayout,
-  "layout.ascensionSaved": saveAscensionLayout,
-  "layout.applied": applyLayout,
-  "layout.renamed": renameLayout,
-  "layout.deleted": deleteLayout,
   "collectible.flipped": flipCollectible,
   "farmHand.flipped": flipFarmHand,
   "bumpkin.flipped": flipBumpkin,

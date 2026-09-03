@@ -3,7 +3,9 @@ import { useActor } from "@xstate/react";
 import * as AuthProvider from "features/auth/lib/Provider";
 import { Context as GameContext } from "features/game/GameProvider";
 import { CONFIG } from "lib/config";
+import { fetchWithRetry } from "lib/fetchWithRetry";
 import { ERRORS } from "lib/errors";
+import { secureFetch } from "lib/requestToken";
 import { randomID } from "lib/utils/random";
 import type {
   EconomyPlayersResponse,
@@ -151,7 +153,7 @@ export function useEditorApi() {
     }
 
     const promise = (async (): Promise<PlayerEconomyConfigRow[]> => {
-      const response = await fetch(listUrl, {
+      const response = await fetchWithRetry(listUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -268,7 +270,7 @@ export function useEditorApi() {
       throw new Error(ERRORS.SESSION_EXPIRED);
     }
 
-    const response = await fetch(`${CONFIG.API_URL}/event/${farmId}`, {
+    const response = await secureFetch(`${CONFIG.API_URL}/event/${farmId}`, {
       method: "POST",
       headers: eventHeaders(token),
       body: JSON.stringify({
@@ -343,7 +345,7 @@ export function useEditorApi() {
       url.searchParams.set("extension", params.extension.trim());
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
@@ -411,7 +413,7 @@ export function useEditorApi() {
         return [];
       }
 
-      const response = await fetch(`${CONFIG.API_URL}/event/${farmId}`, {
+      const response = await secureFetch(`${CONFIG.API_URL}/event/${farmId}`, {
         method: "POST",
         headers: eventHeaders(token),
         body: JSON.stringify({
@@ -500,7 +502,7 @@ export function useEditorApi() {
       url.searchParams.set("type", type);
       url.searchParams.set("slug", trimmed);
 
-      const response = await fetch(url.toString(), {
+      const response = await fetchWithRetry(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -586,7 +588,7 @@ export function useEditorApi() {
         url.searchParams.set("targetFarmId", String(targetFarmId));
       }
 
-      const response = await fetch(url.toString(), {
+      const response = await fetchWithRetry(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",

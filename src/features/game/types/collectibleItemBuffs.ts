@@ -1192,7 +1192,9 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
   // Faction Shop
   "Gourmet Hourglass": (game) => [
     {
-      shortDescription: translate("description.gourmet.hourglass.boost"),
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.gourmet.hourglass.boost.speed")
+        : translate("description.gourmet.hourglass.boost"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
     },
@@ -1862,9 +1864,11 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
       boostedItemIcon: ITEM_DETAILS["Crafting Box"].image,
     },
   ],
-  "Boar Shrine": () => [
+  "Boar Shrine": (game) => [
     {
-      shortDescription: translate("description.boarShrine.buff"),
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.boarShrine.buff.speed")
+        : translate("description.boarShrine.buff"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
       boostedItemIcon: chefHat,
@@ -1918,15 +1922,19 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
     },
   ],
-  "Collie Shrine": () => [
+  "Collie Shrine": (game) => [
     {
-      shortDescription: translate("description.collieShrine.buff"),
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.collieShrine.buff.speed")
+        : translate("description.collieShrine.buff"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
       boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
     },
     {
-      shortDescription: translate("description.collieShrine.buff.2"),
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.collieShrine.buff.2.speed")
+        : translate("description.collieShrine.buff.2"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
       boostedItemIcon: SUNNYSIDE.animals.sheepSleeping,
@@ -1958,7 +1966,7 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
       boostedItemIcon: ITEM_DETAILS.Stone.image,
     },
   ],
-  "Legendary Shrine": () => [
+  "Legendary Shrine": (game) => [
     {
       shortDescription: translate("description.legendaryShrine.buff"),
       labelType: "success",
@@ -1989,7 +1997,10 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
       boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
     },
     {
-      shortDescription: translate("description.legendaryShrine.buff.6"),
+      // Only the cook-TIME half is windowed; the yield buffs above stay as they are.
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.legendaryShrine.buff.6.speed")
+        : translate("description.legendaryShrine.buff.6"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
       boostedItemIcon: chefHat,
@@ -2074,9 +2085,11 @@ export const COLLECTIBLE_BUFF_LABELS: Partial<
       boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
     },
   ],
-  "Bantam Shrine": () => [
+  "Bantam Shrine": (game) => [
     {
-      shortDescription: translate("description.bantamShrine.buff"),
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.bantamShrine.buff.speed")
+        : translate("description.bantamShrine.buff"),
       labelType: "info",
       boostTypeIcon: SUNNYSIDE.icons.stopwatch,
       boostedItemIcon: SUNNYSIDE.animals.chickenAsleep,

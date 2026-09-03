@@ -1,6 +1,7 @@
 import { InnerPanel } from "components/ui/Panel";
+import { Chip } from "components/ui/Chip";
 import { ITEM_DETAILS } from "features/game/types/images";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useContext, useMemo, useRef, useState } from "react";
 import { SEASON_ICONS } from "./SeasonalSeeds";
 import { SUNNYSIDE } from "assets/sunnyside";
 import { NoticeboardItems } from "features/world/ui/kingdom/KingdomNoticeboard";
@@ -30,6 +31,7 @@ import { SELLABLE } from "features/game/events/landExpansion/sellCrop";
 import { GREENHOUSE_CROP_TIME_SECONDS } from "features/game/lib/greenhouseGrowTimes";
 import { useGame } from "features/game/GameProvider";
 import { useAppTranslation } from "lib/i18n/useAppTranslations";
+import { translate } from "lib/i18n/translate";
 import { isFullMoonBerry } from "features/game/events/landExpansion/seedBought";
 import fullMoon from "assets/icons/full_moon.png";
 import { BoostsDisplay } from "components/ui/layouts/BoostsDisplay";
@@ -42,6 +44,17 @@ import {
 } from "features/game/events/landExpansion/plantGreenhouse";
 import { getFlowerTime } from "features/game/events/landExpansion/plantFlower";
 import { useNow } from "lib/utils/hooks/useNow";
+import classNames from "classnames";
+import { Context } from "features/game/GameProvider";
+import {
+  getPreActionDisplay,
+  PRE_ACTION_TICK_MS,
+} from "features/game/lib/timerDisplay";
+import { getSeedBoostWindows } from "features/game/lib/seedBoostWindows";
+import {
+  getBoostContributionEntries,
+  getSeedBoostContributions,
+} from "features/game/lib/boostContributions";
 import {
   INITIAL_STOCK,
   INVENTORY_LIMIT,
@@ -57,16 +70,57 @@ type GrowthTime = {
   boostsUsed: { name: BoostName; value: string }[];
 };
 
+type GuideCategory = "crops" | "fruits" | "greenhouse" | "flowers" | "exotics";
+
 export const CropGuide = () => {
   const { gameState } = useGame();
   const state = gameState.context.state;
   const inventory = state.inventory;
   const { t } = useAppTranslation();
-  const now = useNow();
+  // Ticks slowly so a guide left open follows a booster burning down. One clock
+  // for the whole guide: a per-row one would mean an interval per listed seed.
+  const now = useNow({ live: true, intervalMs: PRE_ACTION_TICK_MS });
   const [showBoostsKey, setShowBoostsKey] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<GuideCategory>("crops");
+
+  const categories: {
+    id: GuideCategory;
+    label: string;
+    icon: string;
+  }[] = [
+    {
+      id: "crops",
+      label: t("cropGuide.crops"),
+      icon: ITEM_DETAILS.Sunflower.image,
+    },
+    {
+      id: "fruits",
+      label: t("cropGuide.fruits"),
+      icon: ITEM_DETAILS.Apple.image,
+    },
+    {
+      id: "greenhouse",
+      label: t("cropGuide.greenhouse"),
+      icon: ITEM_DETAILS.Olive.image,
+    },
+    {
+      id: "flowers",
+      label: t("cropGuide.flower"),
+      icon: ITEM_DETAILS["Sunpetal Seed"].image,
+    },
+    {
+      id: "exotics",
+      label: t("cropGuide.exotics"),
+      icon: ITEM_DETAILS["Giant Apple"].image,
+    },
+  ];
 
   return (
-    <InnerPanel className="scrollable max-h-[300px] overflow-y-scroll overflow-x-hidden">
+    <InnerPanel
+      className="scrollable max-h-[360px] overflow-y-scroll overflow-x-hidden"
+      onClick={() => setShowBoostsKey(null)}
+    >
       <div className="p-1">
         <NoticeboardItems
           items={[
@@ -94,72 +148,30 @@ export const CropGuide = () => {
           ]}
         />
       </div>
-      <Label type="default" className="mb-2">
-        {t("cropGuide.crops")}
-      </Label>
-      {getKeys({ ...CROP_SEEDS }).map((seed, index) => {
-        const crop = CROP_SEEDS[seed].yield as CropName;
-        return (
-          <CropRow
-            key={seed}
-            crop={crop}
-            seed={seed}
-            seconds={CROPS[crop].harvestSeconds}
-            coins={CROPS[crop].sellPrice}
-            state={state}
-            now={now}
-            alternateBg={index % 2 === 0}
-            showBoostsKey={showBoostsKey}
-            setShowBoostsKey={setShowBoostsKey}
-          />
-        );
-      })}
-      <div className="flex my-2 items-center">
-        <Label type="default" className="mr-2">
-          {t("cropGuide.fruits")}
-        </Label>
-        {!inventory["Fruit Patch"] && (
-          <Label type="danger">{t("cropGuide.fruitPatchRequired")}</Label>
-        )}
+      <div className="mb-2 flex flex-wrap justify-center gap-2 px-1">
+        {categories.map((category) => (
+          <Chip
+            key={category.id}
+            onClick={() => setSelectedCategory(category.id)}
+            selected={selectedCategory === category.id}
+            icon={category.icon}
+            className="shrink-0 whitespace-nowrap"
+          >
+            {category.label}
+          </Chip>
+        ))}
       </div>
 
-      <p className="text-xs ml-2 mb-2">{t("cropGuide.fruit.description")}</p>
-      {getKeys({ ...PATCH_FRUIT_SEEDS }).map((seed, index) => {
-        const crop = PATCH_FRUIT_SEEDS[seed].yield;
-        return (
-          <CropRow
-            key={seed}
-            seed={seed}
-            crop={crop}
-            seconds={PATCH_FRUIT_SEEDS[seed].plantSeconds}
-            coins={PATCH_FRUIT[crop].sellPrice}
-            state={state}
-            now={now}
-            alternateBg={index % 2 === 0}
-            showBoostsKey={showBoostsKey}
-            setShowBoostsKey={setShowBoostsKey}
-          />
-        );
-      })}
-      <div className="flex my-2 items-center">
-        <Label type="default" className="mr-2">
-          {t("cropGuide.greenhouse")}
-        </Label>
-        {!inventory.Greenhouse && (
-          <Label type="danger">{t("cropGuide.greenhouseRequired")}</Label>
-        )}
-      </div>
-      {getKeys({ ...GREENHOUSE_FRUIT_SEEDS, ...GREENHOUSE_SEEDS }).map(
-        (seed, index) => {
-          const crop = { ...GREENHOUSE_FRUIT_SEEDS, ...GREENHOUSE_SEEDS }[seed]
-            .yield as GreenHouseCropName;
+      {selectedCategory === "crops" &&
+        getKeys({ ...CROP_SEEDS }).map((seed, index) => {
+          const crop = CROP_SEEDS[seed].yield as CropName;
           return (
             <CropRow
               key={seed}
               crop={crop}
               seed={seed}
-              seconds={GREENHOUSE_CROP_TIME_SECONDS[crop]}
-              coins={SELLABLE[crop].sellPrice}
+              seconds={CROPS[crop].harvestSeconds}
+              coins={CROPS[crop].sellPrice}
               state={state}
               now={now}
               alternateBg={index % 2 === 0}
@@ -167,48 +179,106 @@ export const CropGuide = () => {
               setShowBoostsKey={setShowBoostsKey}
             />
           );
-        },
+        })}
+      {selectedCategory === "fruits" && (
+        <>
+          {!inventory["Fruit Patch"] && (
+            <Label type="danger" className="mb-2">
+              {t("cropGuide.fruitPatchRequired")}
+            </Label>
+          )}
+          <p className="ml-2 mb-2 text-xs">
+            {t("cropGuide.fruit.description")}
+          </p>
+          {getKeys({ ...PATCH_FRUIT_SEEDS }).map((seed, index) => {
+            const crop = PATCH_FRUIT_SEEDS[seed].yield;
+            return (
+              <CropRow
+                key={seed}
+                seed={seed}
+                crop={crop}
+                seconds={PATCH_FRUIT_SEEDS[seed].plantSeconds}
+                coins={PATCH_FRUIT[crop].sellPrice}
+                state={state}
+                now={now}
+                alternateBg={index % 2 === 0}
+                showBoostsKey={showBoostsKey}
+                setShowBoostsKey={setShowBoostsKey}
+              />
+            );
+          })}
+        </>
       )}
-
-      <div className="flex my-2 items-center">
-        <Label type="default" className="mr-2">
-          {t("cropGuide.flower")}
-        </Label>
-        {!inventory["Flower Bed"] && (
-          <Label type="danger">{t("cropGuide.flowerbedRequired")}</Label>
-        )}
-      </div>
-      <p className="text-xs ml-2 mb-2">{t("cropGuide.flower.description")}</p>
-      {getKeys({ ...FLOWER_SEEDS }).map((seed, index) => {
-        return (
-          <FlowerRow
-            key={seed}
-            seed={seed}
-            seconds={FLOWER_SEEDS[seed].plantSeconds}
-            state={state}
-            alternateBg={index % 2 === 0}
-            showBoostsKey={showBoostsKey}
-            setShowBoostsKey={setShowBoostsKey}
-          />
-        );
-      })}
-
-      <Label type="default" className="my-2">
-        {t("cropGuide.exotics")}
-      </Label>
-      <p className="text-xs ml-2 mb-2">
-        {t("cropGuide.discoverExoticsDuringSpecialEvents")}
-      </p>
-      {getKeys({ ...EXOTIC_CROPS }).map((crop, index) => {
-        return (
-          <ExoticRow
-            key={crop}
-            crop={crop}
-            coins={EXOTIC_CROPS[crop].sellPrice}
-            alternateBg={index % 2 === 0}
-          />
-        );
-      })}
+      {selectedCategory === "greenhouse" && (
+        <>
+          {!inventory.Greenhouse && (
+            <Label type="danger" className="mb-2">
+              {t("cropGuide.greenhouseRequired")}
+            </Label>
+          )}
+          {getKeys({ ...GREENHOUSE_FRUIT_SEEDS, ...GREENHOUSE_SEEDS }).map(
+            (seed, index) => {
+              const crop = {
+                ...GREENHOUSE_FRUIT_SEEDS,
+                ...GREENHOUSE_SEEDS,
+              }[seed].yield as GreenHouseCropName;
+              return (
+                <CropRow
+                  key={seed}
+                  crop={crop}
+                  seed={seed}
+                  seconds={GREENHOUSE_CROP_TIME_SECONDS[crop]}
+                  coins={SELLABLE[crop].sellPrice}
+                  state={state}
+                  now={now}
+                  alternateBg={index % 2 === 0}
+                  showBoostsKey={showBoostsKey}
+                  setShowBoostsKey={setShowBoostsKey}
+                />
+              );
+            },
+          )}
+        </>
+      )}
+      {selectedCategory === "flowers" && (
+        <>
+          {!inventory["Flower Bed"] && (
+            <Label type="danger" className="mb-2">
+              {t("cropGuide.flowerbedRequired")}
+            </Label>
+          )}
+          <p className="ml-2 mb-2 text-xs">
+            {t("cropGuide.flower.description")}
+          </p>
+          {getKeys({ ...FLOWER_SEEDS }).map((seed, index) => (
+            <FlowerRow
+              key={seed}
+              seed={seed}
+              seconds={FLOWER_SEEDS[seed].plantSeconds}
+              state={state}
+              now={now}
+              alternateBg={index % 2 === 0}
+              showBoostsKey={showBoostsKey}
+              setShowBoostsKey={setShowBoostsKey}
+            />
+          ))}
+        </>
+      )}
+      {selectedCategory === "exotics" && (
+        <>
+          <p className="ml-2 mb-2 text-xs">
+            {t("cropGuide.discoverExoticsDuringSpecialEvents")}
+          </p>
+          {getKeys({ ...EXOTIC_CROPS }).map((crop, index) => (
+            <ExoticRow
+              key={crop}
+              crop={crop}
+              coins={EXOTIC_CROPS[crop].sellPrice}
+              alternateBg={index % 2 === 0}
+            />
+          ))}
+        </>
+      )}
     </InnerPanel>
   );
 };
@@ -250,33 +320,39 @@ export const CropRow: React.FC<{
       }`}
     >
       <div className="flex items-center flex-1 min-w-0">
-        <div className="flex items-center w-24 sm:w-32 mr-2 shrink-0">
+        <div className="flex items-center min-w-24 max-w-32 sm:min-w-32 sm:max-w-40 mr-4 shrink-0">
           <img src={ITEM_DETAILS[crop].image} className="w-6 h-auto mr-2" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs">{crop}</p>
+            <p className="text-xs break-words" title={crop}>
+              {crop}
+            </p>
             <p className="text-xxs">{t(getCropCategory(crop))}</p>
           </div>
         </div>
-        <div className="flex flex-col min-w-0">
-          <GrowthTimeCell
-            boostKey={`${seed}-growth-time`}
-            baseSeconds={seconds}
-            boostedTime={boostedTime}
+        <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
+            <GrowthTimeCell
+              boostKey={`${seed}-growth-time`}
+              seed={seed}
+              now={now}
+              baseSeconds={seconds}
+              boostedTime={boostedTime}
+              state={state}
+              showBoostsKey={showBoostsKey}
+              setShowBoostsKey={setShowBoostsKey}
+            />
+            <div className="flex items-center">
+              <img src={SUNNYSIDE.ui.coins} className="w-3 mr-1" />
+              <p className="text-xxs">{coins.toLocaleString()}</p>
+            </div>
+          </div>
+          <SeedCapacityLimits
+            seed={seed}
             state={state}
             showBoostsKey={showBoostsKey}
             setShowBoostsKey={setShowBoostsKey}
           />
-          <div className="flex items-center">
-            <img src={SUNNYSIDE.ui.coins} className="w-3 mr-1" />
-            <p className="text-xxs">{coins.toLocaleString()}</p>
-          </div>
         </div>
-        <SeedCapacityLimits
-          seed={seed}
-          state={state}
-          showBoostsKey={showBoostsKey}
-          setShowBoostsKey={setShowBoostsKey}
-        />
       </div>
 
       <div className="flex items-center shrink-0">
@@ -299,6 +375,8 @@ export const FlowerRow: React.FC<{
   seed: FlowerSeedName;
   seconds: number;
   state: GameState;
+  /** Shared guide clock; the growth-time projection is relative to it. */
+  now: number;
   alternateBg?: boolean;
   showBoostsKey: string | null;
   setShowBoostsKey: (key: string | null) => void;
@@ -306,6 +384,7 @@ export const FlowerRow: React.FC<{
   seed,
   seconds,
   state,
+  now,
   alternateBg,
   showBoostsKey,
   setShowBoostsKey,
@@ -313,7 +392,11 @@ export const FlowerRow: React.FC<{
   const seasons = getKeys(SEASONAL_SEEDS).filter((season) =>
     SEASONAL_SEEDS[season].includes(seed as SeedName),
   );
-  const boostedTime = useMemo(() => getFlowerTime(seed, state), [seed, state]);
+  const { t } = useAppTranslation();
+  const boostedTime = useMemo(
+    () => getFlowerTime(seed, state, now),
+    [seed, state, now],
+  );
 
   return (
     <div
@@ -322,29 +405,35 @@ export const FlowerRow: React.FC<{
       }`}
     >
       <div className="flex items-center flex-1 min-w-0">
-        <div className="flex items-center w-24 sm:w-32 mr-2 shrink-0">
+        <div className="flex items-center min-w-24 max-w-32 sm:min-w-32 sm:max-w-40 mr-4 shrink-0">
           <img src={ITEM_DETAILS[seed].image} className="w-6 h-auto mr-2" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs">{seed}</p>
-            <p className="text-xxs">{`Flower`}</p>
+            <p className="text-xs break-words" title={seed}>
+              {seed}
+            </p>
+            <p className="text-xxs">{t("crops.flower")}</p>
           </div>
         </div>
-        <div className="flex flex-col min-w-0">
-          <GrowthTimeCell
-            boostKey={`${seed}-growth-time`}
-            baseSeconds={seconds}
-            boostedTime={boostedTime}
+        <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
+            <GrowthTimeCell
+              boostKey={`${seed}-growth-time`}
+              seed={seed}
+              now={now}
+              baseSeconds={seconds}
+              boostedTime={boostedTime}
+              state={state}
+              showBoostsKey={showBoostsKey}
+              setShowBoostsKey={setShowBoostsKey}
+            />
+          </div>
+          <SeedCapacityLimits
+            seed={seed}
             state={state}
             showBoostsKey={showBoostsKey}
             setShowBoostsKey={setShowBoostsKey}
           />
         </div>
-        <SeedCapacityLimits
-          seed={seed}
-          state={state}
-          showBoostsKey={showBoostsKey}
-          setShowBoostsKey={setShowBoostsKey}
-        />
       </div>
 
       <div className="flex items-center shrink-0">
@@ -387,7 +476,7 @@ const SeedCapacityLimits: React.FC<{
   }
 
   return (
-    <div className="flex flex-col gap-1 ml-2">
+    <div className="flex flex-col gap-1">
       <CapacityLimit
         seed={seed}
         baseAmount={baseInventoryLimit.toString()}
@@ -449,9 +538,9 @@ const CapacityLimit: React.FC<{
         setShowBoostsKey(showBoostsKey === boostKey ? null : boostKey);
       }}
     >
-      <img src={SUNNYSIDE.icons.lightning} className="w-3 mr-1" />
       <CapacityAmount amount={amount} icon={icon} />
-      <p className="text-xxs line-through ml-1">{baseAmount}</p>
+      <img src={SUNNYSIDE.icons.lightning} className="w-3 mx-1" />
+      <p className="text-xxs line-through">{baseAmount}</p>
       <BoostsDisplay
         boosts={boosts}
         show={showBoostsKey === boostKey}
@@ -528,13 +617,18 @@ const getSeedGrowthTime = ({
   }
 
   if (seed in PATCH_FRUIT_SEEDS) {
-    return getFruitPatchTime(seed as keyof typeof PATCH_FRUIT_SEEDS, state);
+    return getFruitPatchTime(
+      seed as keyof typeof PATCH_FRUIT_SEEDS,
+      state,
+      now,
+    );
   }
 
   if (seed in GREENHOUSE_FRUIT_SEEDS || seed in GREENHOUSE_SEEDS) {
     return getGreenhouseCropTime({
       crop: SEED_TO_PLANT[seed as keyof typeof SEED_TO_PLANT],
       game: state,
+      now,
     });
   }
 
@@ -543,24 +637,55 @@ const getSeedGrowthTime = ({
 
 const GrowthTimeCell: React.FC<{
   boostKey: string;
+  seed: SeedName;
   baseSeconds: number;
   boostedTime: GrowthTime;
   state: GameState;
+  /** Shared guide clock; the projections below are relative to it. */
+  now: number;
   showBoostsKey: string | null;
   setShowBoostsKey: (key: string | null) => void;
 }> = ({
   boostKey,
+  seed,
   baseSeconds,
   boostedTime,
   state,
+  now,
   showBoostsKey,
   setShowBoostsKey,
 }) => {
+  const { showActualTime } = useContext(Context);
   const anchorRef = useRef<HTMLButtonElement>(null);
-  const isTimeBoosted =
-    boostedTime.boostsUsed.length > 0 && boostedTime.seconds !== baseSeconds;
-  const showMediumTime =
-    Math.max(baseSeconds, boostedTime.seconds) > 24 * 60 * 60;
+
+  // A live speed window isn't folded into `boostedTime` — show it as the current
+  // rate, or (in the actual-time view) as the real "plant now → ready in X",
+  // which credits only the part of the grow the booster still covers.
+  // The windowed boosters aren't in `boostsUsed` (they apply over the grow rather
+  // than being baked into it), so name them for the boost panel: their rate in
+  // the speed view, the time each one actually saves in the other.
+  const windowedBoosts = getBoostContributionEntries({
+    contributions: getSeedBoostContributions(state, seed, now),
+    seconds: boostedTime.seconds,
+    at: now,
+    showActualTime,
+    formatSeconds: (seconds) => secondsToString(seconds, { length: "medium" }),
+    formatSpeed: (speed) => translate("description.boostedSpeed", { speed }),
+  });
+  const boostsUsed = [...boostedTime.boostsUsed, ...windowedBoosts];
+  const {
+    displaySeconds,
+    hasNamedBoosts,
+    isBoosted: isTimeBoosted,
+  } = getPreActionDisplay({
+    showActualTime,
+    seconds: boostedTime.seconds,
+    baseSeconds,
+    namedBoostCount: boostsUsed.length,
+    windows: getSeedBoostWindows(state, seed),
+    at: now,
+  });
+  const showMediumTime = Math.max(baseSeconds, displaySeconds) > 24 * 60 * 60;
 
   if (!isTimeBoosted) {
     return (
@@ -579,35 +704,42 @@ const GrowthTimeCell: React.FC<{
     <button
       ref={anchorRef}
       type="button"
-      className="flex items-center mr-2 cursor-pointer relative"
-      aria-expanded={showBoostsKey === boostKey}
+      className={classNames("flex items-center mr-2 relative", {
+        // Only named boosts can be itemised, so only they open the breakdown.
+        "cursor-pointer": hasNamedBoosts,
+      })}
+      disabled={!hasNamedBoosts}
+      aria-expanded={hasNamedBoosts && showBoostsKey === boostKey}
       aria-controls={`${boostKey}-panel`}
       onClick={(e) => {
+        if (!hasNamedBoosts) return;
         e.stopPropagation();
         setShowBoostsKey(showBoostsKey === boostKey ? null : boostKey);
       }}
     >
-      <div className="flex flex-wrap items-center gap-x-2">
+      <div className="flex items-center">
         <div className="flex items-center">
-          <img src={SUNNYSIDE.icons.lightning} className="w-3 mr-1" />
+          <img src={SUNNYSIDE.icons.stopwatch} className="w-3 mr-1" />
           <p className="text-xxs">
-            {secondsToString(boostedTime.seconds, {
+            {secondsToString(displaySeconds, {
               length: showMediumTime ? "medium" : "short",
             })}
           </p>
         </div>
         <div className="flex items-center">
-          <img src={SUNNYSIDE.icons.stopwatch} className="w-3 mr-1" />
-          <p className="text-xxs line-through">
-            {secondsToString(baseSeconds, {
-              length: showMediumTime ? "medium" : "short",
-            })}
-          </p>
+          <img src={SUNNYSIDE.icons.lightning} className="w-3 mx-1" />
+          {displaySeconds !== baseSeconds && (
+            <p className="text-xxs line-through">
+              {secondsToString(baseSeconds, {
+                length: showMediumTime ? "medium" : "short",
+              })}
+            </p>
+          )}
         </div>
       </div>
       <BoostsDisplay
-        boosts={boostedTime.boostsUsed}
-        show={showBoostsKey === boostKey}
+        boosts={boostsUsed}
+        show={hasNamedBoosts && showBoostsKey === boostKey}
         state={state}
         onClick={() =>
           setShowBoostsKey(showBoostsKey === boostKey ? null : boostKey)

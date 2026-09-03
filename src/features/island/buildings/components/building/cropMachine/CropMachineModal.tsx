@@ -14,7 +14,10 @@ import {
   useCropMachineLiveNow,
 } from "./lib/cropMachine";
 import { Box } from "components/ui/Box";
-import { ITEM_DETAILS } from "features/game/types/images";
+import {
+  ITEM_DETAILS,
+  getTranslatedItemName,
+} from "features/game/types/images";
 import { Label } from "components/ui/Label";
 import { InnerPanel, OuterPanel } from "components/ui/Panel";
 import { SUNNYSIDE } from "assets/sunnyside";
@@ -134,9 +137,10 @@ export const CropMachineModalContent: React.FC<Props> = ({
   const seedBalance = selectedSeed
     ? (inventory[selectedSeed] ?? new Decimal(0))
     : new Decimal(0);
-  const maxSupplyable = Math.min(
-    seedBalance.toNumber(),
-    packSeedLimit.toNumber(),
+  // Seed balances can carry a fractional remainder; the machine only
+  // accepts whole seeds, so the "All" button must not send a fraction.
+  const maxSupplyable = Math.floor(
+    Math.min(seedBalance.toNumber(), packSeedLimit.toNumber()),
   );
 
   useLayoutEffect(() => {
@@ -333,10 +337,7 @@ export const CropMachineModalContent: React.FC<Props> = ({
                 <Box image={ITEM_DETAILS[selectedPack.crop].image} />
                 <div className="flex flex-col justify-center space-y-1">
                   <span className="text-xs capitalize">
-                    {`${t("growing")} `}
-                    {selectedPack.crop === "Potato"
-                      ? `${selectedPack.crop}es`
-                      : `${selectedPack.crop}s`}
+                    {`${t("growing")} ${getTranslatedItemName(selectedPack.crop)}`}
                   </span>
                   {show && (
                     <PackGrowthProgressBar
@@ -467,6 +468,7 @@ export const CropMachineModalContent: React.FC<Props> = ({
                                   amount: totalSeeds,
                                 },
                                 state,
+                                now,
                               ).milliSeconds / 1000,
                               {
                                 length: "medium",
@@ -547,6 +549,7 @@ export const CropMachineModalContent: React.FC<Props> = ({
                               amount: selectedPack.seeds,
                             },
                             state,
+                            now,
                           ).milliSeconds / 1000,
                           {
                             length: "medium",

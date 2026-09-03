@@ -30,6 +30,11 @@ import { RequiredReputation } from "features/island/hud/components/reputation/Re
 import { SUNNYSIDE } from "assets/sunnyside";
 import { getKeys } from "lib/object";
 import { useNow } from "lib/utils/hooks/useNow";
+import {
+  Locked,
+  useIsLocked,
+} from "features/retreat/components/personhood/Locked";
+import { WithdrawCooldownNotice } from "./WithdrawCooldownNotice";
 
 const _balance = (state: MachineState) => state.context.state.balance;
 const _usd = (state: MachineState) => state.context.prices.sfl?.usd ?? 0.0;
@@ -53,6 +58,8 @@ export const MakeOffer: React.FC<{
     reputation: Reputation.Cropkeeper,
     now,
   });
+  // A hold stops the account trading; say so instead of a form that fails.
+  const locked = useIsLocked();
   const usd = useSelector(gameService, _usd);
 
   const [offer, setOffer] = useState(0);
@@ -156,6 +163,7 @@ export const MakeOffer: React.FC<{
               <img src={SUNNYSIDE.icons.search} className="h-6 mr-2" />
               <p className="text-xs mb-2">{t("marketplace.dodgyTrades")}</p>
             </div>
+            <WithdrawCooldownNotice display={display} />
           </div>
 
           <div className="flex">
@@ -185,6 +193,7 @@ export const MakeOffer: React.FC<{
             <img src={SUNNYSIDE.icons.search} className="h-6 mr-2" />
             <p className="text-xs mb-2">{t("marketplace.dodgyTrades")}</p>
           </div>
+          <WithdrawCooldownNotice display={display} />
         </div>
 
         <div className="flex">
@@ -212,6 +221,8 @@ export const MakeOffer: React.FC<{
       />
     );
   }
+
+  if (locked) return <Locked />;
 
   /* TODO only use game wallet when required */
   return (

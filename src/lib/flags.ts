@@ -24,7 +24,7 @@ const usernameFeatureFlag = (game: GameState) => {
   );
 };
 
-const betaFeatureFlag = ({ inventory }: GameState) =>
+export const betaFeatureFlag = ({ inventory }: GameState) =>
   CONFIG.NETWORK === "amoy" || !!inventory?.["Beta Pass"]?.gt(0);
 
 export const testnetFeatureFlag = () => CONFIG.NETWORK === "amoy";
@@ -170,9 +170,9 @@ const FEATURE_FLAGS = {
 
   // Temporary Feature Flags
   FACE_RECOGNITION_TEST: betaFeatureFlag,
+  // The developer-options button that forces a captcha on your own farm
+  TRIGGER_CAPTCHA: betaFeatureFlag,
   LEDGER: testnetLocalStorageFeatureFlag("ledger"),
-
-  LEAGUES: () => false,
 
   EASTER: () => false,
 
@@ -196,7 +196,7 @@ const FEATURE_FLAGS = {
   // Speed-rate (Clash-of-Clans potion) model for time-based boosts — starting
   // with the Sparrow Shrine on crops. When on, planting stores the new
   // baseDurationMs + true plantedAt model; when off, boosts stay discount-at-start.
-  SPEED_BOOSTS: usernameFeatureFlag,
+  SPEED_BOOSTS: betaFeatureFlag,
 
   // Bulk Mixer tab in the feeder machine: mix the missing feed for every
   // waiting animal at once. Beta-pass / testnet only until it ships.
@@ -218,3 +218,13 @@ export type FeatureName = keyof typeof FEATURE_FLAGS;
 export const hasFeatureAccess = (game: GameState, featureName: FeatureName) => {
   return FEATURE_FLAGS[featureName](game);
 };
+
+/**
+ * The feature names currently gated behind `betaFeatureFlag` (Beta Pass /
+ * testnet). Derived from FEATURE_FLAGS by identity so this list can't drift
+ * from the flags it's reporting on - a feature only needs to be flagged with
+ * betaFeatureFlag once to show up here, nothing else to maintain.
+ */
+export const BETA_FEATURE_NAMES = (
+  Object.keys(FEATURE_FLAGS) as FeatureName[]
+).filter((name) => FEATURE_FLAGS[name] === betaFeatureFlag);

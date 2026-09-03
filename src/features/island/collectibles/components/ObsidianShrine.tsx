@@ -8,8 +8,17 @@ import { ProgressBar } from "components/ui/ProgressBar";
 import { Context } from "features/game/GameProvider";
 import { useAppTranslation } from "lib/i18n/useAppTranslations";
 import { Label } from "components/ui/Label";
-import { ITEM_DETAILS } from "features/game/types/images";
-import { EXPIRY_COOLDOWNS } from "features/game/lib/collectibleBuilt";
+import {
+  ITEM_DETAILS,
+  getTranslatedItemName,
+} from "features/game/types/images";
+import {
+  EXPIRY_COOLDOWNS,
+  getCollectibleExpiry,
+  getCollectiblesAcrossLocations,
+} from "features/game/lib/collectibleBuilt";
+import { TemporaryCollectibleModal } from "features/game/components/TemporaryCollectibleModal";
+import { hasFeatureAccess } from "lib/flags";
 import { Modal } from "components/ui/Modal";
 import { Button } from "components/ui/Button";
 import { InnerPanel, OuterPanel } from "components/ui/Panel";
@@ -32,6 +41,8 @@ import type {
 } from "features/game/types/game";
 import { secondsToString } from "lib/utils/time";
 import { getCropPlotTime } from "features/game/events/landExpansion/plant";
+import { getPreActionTime } from "features/game/lib/timerDisplay";
+import { getSeedBoostWindows } from "features/game/lib/seedBoostWindows";
 import { getAvailablePlots } from "features/game/events/landExpansion/bulkPlant";
 import { getCropsToHarvest } from "features/game/events/landExpansion/bulkHarvest";
 import { getReward } from "features/game/events/landExpansion/harvest";
@@ -74,18 +85,33 @@ export const ObsidianShrine: React.FC<CollectibleProps> = ({
   const { gameService, showTimers, showAnimations } = useContext(Context);
   const { isVisiting } = useVisiting();
   const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
   const [show, setShow] = useState(false);
   const [reward, setReward] = useState<Reward>();
 
-  const expiresAt = createdAt + (EXPIRY_COOLDOWNS["Obsidian Shrine"] ?? 0);
+  const state = useSelector(gameService, selectGameState);
+
+  // Read the placement so any time bought via `collectible.extended` is included
+  // in the countdown rather than the shrine appearing to expire early.
+  const placed = getCollectiblesAcrossLocations(state, "Obsidian Shrine").find(
+    (collectible) => collectible.id === id,
+  );
+  const extendedMs = placed?.extendedMs ?? 0;
+  const expiresAt = getCollectibleExpiry({
+    name: "Obsidian Shrine",
+    collectible: placed ?? { createdAt },
+    game: state,
+  });
   const { totalSeconds: secondsToExpire } = useCountdown(expiresAt);
-  const durationSeconds = (EXPIRY_COOLDOWNS["Obsidian Shrine"] ?? 0) / 1000;
+  const durationSeconds =
+    ((EXPIRY_COOLDOWNS["Obsidian Shrine"] ?? 0) + extendedMs) / 1000;
   const percentage = 100 - (secondsToExpire / durationSeconds) * 100;
   const hasExpired = secondsToExpire <= 0;
+  const canExtend =
+    !isVisiting && hasFeatureAccess(state, "SPEED_BOOSTS") && !!placed;
 
   const now = useNow({ live: !hasExpired, autoEndAt: expiresAt });
 
-  const state = useSelector(gameService, selectGameState);
   const verified = useSelector(gameService, selectVerified);
   const farmId = useSelector(gameService, (s) => s.context.farmId);
   const isSeasoned = isSeasonedPlayer({ game: state, verified, now });
@@ -266,17 +292,27 @@ export const ObsidianShrine: React.FC<CollectibleProps> = ({
         <OuterPanel>
           <div className="flex items-center justify-between flex-wrap gap-1 px-1 mb-1">
             <Label type="default" icon={ITEM_DETAILS["Obsidian Shrine"].image}>
-              {"Obsidian Shrine"}
+              {getTranslatedItemName("Obsidian Shrine")}
             </Label>
-            <Label type="info" secondaryIcon={SUNNYSIDE.icons.stopwatch}>
-              {t("time.remaining", {
-                time: secondsToString(secondsToExpire, {
-                  length: "medium",
-                  isShortFormat: true,
-                  removeTrailingZeros: true,
-                }),
-              })}
-            </Label>
+            <div className="flex items-center gap-1">
+              <Label type="info" secondaryIcon={SUNNYSIDE.icons.stopwatch}>
+                {t("time.remaining", {
+                  time: secondsToString(secondsToExpire, {
+                    length: "medium",
+                    isShortFormat: true,
+                    removeTrailingZeros: true,
+                  }),
+                })}
+              </Label>
+              {canExtend && (
+                <Button
+                  className="w-auto h-8 px-2 text-xs"
+                  onClick={() => setShowExtendModal(true)}
+                >
+                  {t("extend")}
+                </Button>
+              )}
+            </div>
           </div>
 
           {reward ? (
@@ -303,6 +339,16 @@ export const ObsidianShrine: React.FC<CollectibleProps> = ({
           )}
         </OuterPanel>
       </Modal>
+
+      <TemporaryCollectibleModal
+        show={showExtendModal}
+        onHide={() => setShowExtendModal(false)}
+        name="Obsidian Shrine"
+        id={id}
+        location={location}
+        expiresAt={expiresAt}
+        canExtend={canExtend}
+      />
 
       {hasReadyCrops && (
         <img
@@ -371,11 +417,24 @@ const HarvestSection: React.FC<{
   );
 };
 
-const getPlantSeconds = (
-  selectedSeed: CropSeedName,
-  state: GameState,
-  createdAt: number,
-) => {
+/**
+ * The grow time to show for the seed about to be bulk-planted. A live speed
+ * window isn't folded into `getCropPlotTime`, so surface it the way the other
+ * pre-action panels do: the current rate in the speed view, or the real "plant
+ * now → ready in X" in the actual-time view, which credits only the part of the
+ * grow the booster still covers.
+ */
+const getPlantTime = ({
+  selectedSeed,
+  state,
+  showActualTime,
+  createdAt,
+}: {
+  selectedSeed: CropSeedName;
+  state: GameState;
+  showActualTime: boolean;
+  createdAt: number;
+}) => {
   const yields = SEEDS[selectedSeed as SeedName].yield;
 
   const { time } = getCropPlotTime({
@@ -383,7 +442,13 @@ const getPlantSeconds = (
     game: state,
     createdAt,
   });
-  return time;
+
+  return getPreActionTime({
+    showActualTime,
+    seconds: time,
+    windows: getSeedBoostWindows(state, selectedSeed),
+    at: createdAt,
+  });
 };
 
 const PlantSection: React.FC<{
@@ -391,7 +456,7 @@ const PlantSection: React.FC<{
   availablePlots: [string, CropPlot][];
 }> = ({ state, availablePlots }) => {
   const { t } = useAppTranslation();
-  const { gameService } = useContext(Context);
+  const { gameService, showActualTime } = useContext(Context);
   const now = useNow({ live: true });
 
   const [selectedSeed, setSelectedSeed] = useState<CropSeedName | null>(
@@ -423,6 +488,15 @@ const PlantSection: React.FC<{
     selectedSeed && selectedSeed in availableSeeds
       ? selectedSeed
       : ((Object.keys(availableSeeds)[0] as CropSeedName | undefined) ?? null);
+
+  const plantTime = effectiveSeed
+    ? getPlantTime({
+        selectedSeed: effectiveSeed,
+        state,
+        showActualTime,
+        createdAt: now,
+      })
+    : undefined;
 
   const selectSeed = (seed: CropSeedName) => {
     localStorage.setItem(SEED_STORAGE_KEY, seed);
@@ -479,7 +553,7 @@ const PlantSection: React.FC<{
               />
             ))}
           </div>
-          {effectiveSeed && (
+          {effectiveSeed && plantTime && (
             <div className="flex flex-wrap justify-between gap-1 my-2 px-1">
               <Label
                 type="default"
@@ -487,14 +561,27 @@ const PlantSection: React.FC<{
                   ITEM_DETAILS[SEEDS[effectiveSeed].yield as CropName]?.image
                 }
               >
-                {effectiveSeed}
+                {getTranslatedItemName(effectiveSeed)}
               </Label>
-              <Label type="info" secondaryIcon={SUNNYSIDE.icons.stopwatch}>
-                {secondsToString(getPlantSeconds(effectiveSeed, state, now), {
-                  length: "medium",
-                  removeTrailingZeros: true,
-                })}
-              </Label>
+              <div className="flex items-center gap-1">
+                <Label type="info" secondaryIcon={SUNNYSIDE.icons.stopwatch}>
+                  {secondsToString(plantTime.displaySeconds, {
+                    length: "medium",
+                    removeTrailingZeros: true,
+                  })}
+                </Label>
+                {plantTime.speed > 1 && (
+                  <Label
+                    type="vibrant"
+                    icon={SUNNYSIDE.icons.lightning}
+                    className="whitespace-nowrap"
+                  >
+                    {t("description.boostedSpeed", {
+                      speed: Number(plantTime.speed.toFixed(2)),
+                    })}
+                  </Label>
+                )}
+              </div>
             </div>
           )}
           <Button
@@ -505,7 +592,9 @@ const PlantSection: React.FC<{
             {plotsCount === 0
               ? t("obsidianShrine.noPlots")
               : effectiveSeed
-                ? t("obsidianShrine.plant", { seed: effectiveSeed })
+                ? t("obsidianShrine.plant", {
+                    seed: getTranslatedItemName(effectiveSeed),
+                  })
                 : t("obsidianShrine.selectSeed")}
           </Button>
         </>

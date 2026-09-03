@@ -13,7 +13,10 @@ import {
   type FlowerGrowthStage,
 } from "features/game/types/flowers";
 import { TimerPopover } from "../common/TimerPopover";
-import { ITEM_DETAILS } from "features/game/types/images";
+import {
+  ITEM_DETAILS,
+  getTranslatedItemName,
+} from "features/game/types/images";
 import { getItemDescription } from "features/game/lib/getItemDescription";
 import { NPC_WEARABLES } from "lib/npcs";
 import { Label } from "components/ui/Label";
@@ -35,14 +38,12 @@ import { Panel } from "components/ui/Panel";
 import { secondsToString } from "lib/utils/time";
 import type { PlantedFlower } from "features/game/types/game";
 import type { MachineState } from "features/game/lib/gameMachine";
-import { useNow } from "lib/utils/hooks/useNow";
 import {
   computeReadyAt,
-  getEffectiveSpeedAt,
+  areBoostWindowsEqual,
   getFlowerBoostWindows,
-  workAccruedAt,
-  type BoostWindow,
 } from "features/game/lib/boostWindows";
+import { useNodeTimer } from "features/game/lib/useNodeTimer";
 
 interface Props {
   id: string;
@@ -139,20 +140,6 @@ const _gameState = (state: MachineState) => state.context.state;
 const _flowerBoostWindows = (state: MachineState) =>
   getFlowerBoostWindows(state.context.state);
 
-// Field comparator for the flower boost windows so the selector skips re-renders
-// without allocating JSON strings on every service update.
-const areBoostWindowsEqual = (a: BoostWindow[], b: BoostWindow[]) =>
-  a.length === b.length &&
-  a.every((window, index) => {
-    const other = b[index];
-    return (
-      other !== undefined &&
-      window.from === other.from &&
-      window.to === other.to &&
-      window.speed === other.speed
-    );
-  });
-
 const Flower: React.FC<{ flower: PlantedFlower; id: string }> = ({
   flower,
   id,
@@ -202,35 +189,19 @@ const Flower: React.FC<{ flower: PlantedFlower; id: string }> = ({
         })
       : startedAt + growTimeMs;
 
-  // Coarse 1s clock to pick the current boost speed; only windowed flowers are
-  // boosted. Tick the countdown faster (1000/speed) so it drops ~1s per visual
-  // tick rather than jumping by `speed` each real second.
-  const tickNow = useNow({
-    live: baseDurationMs !== undefined,
-    autoEndAt: readyAt,
+  // `secondsLeft` is the remaining WORK: it drives the growth stage, the progress
+  // fill and the insta-grow cost, none of which may change with a display setting.
+  // `displaySeconds` is the reading the player has chosen to see.
+  const {
+    speed,
+    workLeftSeconds: secondsLeft,
+    displaySeconds,
+  } = useNodeTimer({
+    startedAt,
+    baseDurationMs,
+    windows: flowerBoostWindows,
+    legacyReadyAt: readyAt,
   });
-  const speed =
-    baseDurationMs !== undefined
-      ? getEffectiveSpeedAt({ at: tickNow, windows: flowerBoostWindows })
-      : 1;
-  const intervalMs = Math.max(Math.round(1000 / Math.max(speed, 1)), 250);
-  const now = useNow({ live: true, autoEndAt: readyAt, intervalMs });
-
-  // Remaining time is remaining *work* (in base duration) for windowed flowers, so
-  // it ticks down faster while a boost window is active; legacy counts down to readyAt.
-  const secondsLeft =
-    baseDurationMs !== undefined
-      ? Math.max(
-          (baseDurationMs -
-            workAccruedAt({
-              startedAt,
-              at: now,
-              windows: flowerBoostWindows,
-            })) /
-            1000,
-          0,
-        )
-      : Math.max((readyAt - now) / 1000, 0);
   // Fold pre-lift banked work into the denominator so the progress bar retains
   // its fill across a landscaping lift instead of snapping backward.
   const totalSeconds =
@@ -358,9 +329,13 @@ const Flower: React.FC<{ flower: PlantedFlower; id: string }> = ({
                   ? ITEM_DETAILS[flower.name].image
                   : SUNNYSIDE.icons.search
               }
-              description={hasHarvestedBefore ? flower.name : "Unknown"}
+              description={
+                hasHarvestedBefore
+                  ? getTranslatedItemName(flower.name)
+                  : t("unknown")
+              }
               showPopover={showPopover}
-              timeLeft={secondsLeft}
+              timeLeft={displaySeconds}
               speed={speed}
             />
           </div>
@@ -377,7 +352,7 @@ const Flower: React.FC<{ flower: PlantedFlower; id: string }> = ({
           >
             <ProgressBar
               percentage={growPercentage}
-              seconds={!flower.dirty ? secondsLeft : undefined}
+              seconds={!flower.dirty ? displaySeconds : undefined}
               type="progress"
               formatLength="short"
             />
@@ -488,6 +463,9 @@ const Flower: React.FC<{ flower: PlantedFlower; id: string }> = ({
             <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
               <Label type="vibrant">{t("instaGrow")}</Label>
               <Label type="info" icon={SUNNYSIDE.icons.stopwatch}>
+                {/* Deliberately the WORK reading, not the player's display
+                    setting: it is the quantity the Obsidian cost below is
+                    calculated from, so the two must agree. */}
                 {t("instaGrow.timeRemaining", {
                   time: secondsToString(secondsLeft, { length: "medium" }),
                 })}

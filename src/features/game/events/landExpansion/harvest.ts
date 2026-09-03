@@ -522,7 +522,13 @@ export function getCropYieldAmount({
     boostsUsed.push({ name: "Infernal Pitchfork", value: "+3" });
   }
 
-  if (isTemporaryCollectibleActive({ name: "Legendary Shrine", game })) {
+  if (
+    isTemporaryCollectibleActive({
+      name: "Legendary Shrine",
+      game,
+      now: createdAt,
+    })
+  ) {
     amount += 1;
     boostsUsed.push({ name: "Legendary Shrine", value: "+1" });
   }
@@ -1111,6 +1117,13 @@ export function harvestCropFromPlot({
 
   if (!plot) {
     throw new Error("Plot does not exist");
+  }
+
+  // A lifted plot keeps growing while it sits in the inventory - the pause is
+  // only applied when it is placed back down, so harvesting an unplaced plot
+  // would side-step it entirely.
+  if (plot.x === undefined && plot.y === undefined) {
+    throw new Error("Plot is not placed");
   }
 
   const cropAffectedBy = getAffectedWeather({

@@ -123,6 +123,7 @@ import type { TwitterPost, TwitterPostName } from "./social";
 import type { NetworkName } from "../events/landExpansion/updateNetwork";
 import type { RewardBoxes, RewardBoxName } from "./rewardBoxes";
 import type {
+  FloatingIslandGameName,
   FloatingIslandShop,
   FloatingShopItemName,
 } from "./floatingIsland";
@@ -134,7 +135,6 @@ import type { ClutterName } from "./clutter";
 import type { PetName, PetResourceName, Pets } from "./pets";
 import type { RockName } from "./resources";
 import type { PetShopItemName } from "./petShop";
-import type { League } from "features/leagues/leagues";
 import type { Buff, BuffName } from "./buffs";
 import type {
   CrustaceanChum,
@@ -958,6 +958,13 @@ export type FruitPatch = {
 
 export type BuildingProduct = {
   name: CookableName | ProcessedResource;
+  /**
+   * Stable identity for the queue entry. Recipes used to be addressed by their
+   * `readyAt`, which stops working once that value is derived live from the boost
+   * windows (see `cookingReadiness`). Absent on recipes queued before this existed —
+   * callers fall back to matching on `readyAt` for those.
+   */
+  id?: string;
   readyAt: number;
   /**
    * @deprecated Use per-item quantity fields instead.
@@ -970,6 +977,14 @@ export type BuildingProduct = {
   skills?: Partial<Record<BumpkinRevampSkillName, boolean | number>>;
   timeRemaining?: number;
   startedAt?: number;
+  /**
+   * The recipe's un-boosted cook time with PERMANENT boosts (wearables, Desert
+   * Gnome, Fast Feasts/Frosted Cakes, building oil) already folded in. Present only
+   * on recipes queued under the speed-rate model; its absence selects the legacy
+   * baked timing, so the read path keys off this marker, NOT the `SPEED_BOOSTS`
+   * flag — matching every other activity.
+   */
+  baseDurationMs?: number;
   requirements?: Inventory;
 };
 
@@ -1007,6 +1022,13 @@ export type PlacedItem = {
    * calendar event. Stays placed/owned but grants no protection until renewed.
    */
   used?: boolean;
+  /**
+   * Extra active time (ms) bought on top of a temporary collectible's base
+   * cooldown via `collectible.extended`. Banked on the placement rather than
+   * shifting `createdAt`, so the boost window simply runs longer instead of
+   * losing the time already served. Cleared when the placement is renewed.
+   */
+  extendedMs?: number;
 };
 
 export type ShakeItem = PlacedItem & { shakenAt?: number };
@@ -1103,19 +1125,19 @@ export type LayoutFlippablePlacement = LayoutCoordinates & {
  * Items are keyed by `id` so applying a layout repositions the player's
  * existing items. Collectibles/buildings mirror the live `name -> PlacedItem[]`
  * buckets (capturing `flipped`); resources mirror the live `Record<id, {...}>`
- * buckets whose coordinates live as top-level x/y. See `saveLayout`/`applyLayout`.
+ * buckets whose coordinates live as top-level x/y. Stored server-side in the
+ * `layouts` collection; created/applied via the layout effects
+ * (actions/layoutEffects.ts).
  */
 export type SavedLayout = {
+  /**
+   * Stable server-assigned id (uuid). Layouts are addressed by id on the
+   * wire — array indices would race across async effect round-trips.
+   */
+  id: string;
   name: string;
   createdAt: number;
   updatedAt: number;
-  /**
-   * Marks the auto-managed "Ascension Layout" captured when the player first
-   * ascends (volcano→swamp) and re-applied on later ascensions. It is protected:
-   * the player cannot delete, rename, or overwrite it, and it does not count
-   * against the manual `MAX_SAVED_LAYOUTS` limit.
-   */
-  auto?: boolean;
   collectibles: Partial<Record<CollectibleName, LayoutPlacement[]>>;
   buildings: Partial<Record<BuildingName, LayoutPlacement[]>>;
   resources: {
@@ -1969,9 +1991,23 @@ export type Animal = {
   createdAt: number;
   experience: number;
   asleepAt: number;
+  /**
+   * The animal's wake time. Under the speed-rate model (`baseDurationMs` set)
+   * this is a non-authoritative CACHE of the wake time projected at sleep — the
+   * live value is derived by `getAnimalReadyAt`, since a shrine placed or burned
+   * mid-sleep moves it. Legacy (unmarked) animals, and any animal woken
+   * instantly, carry the authoritative value here.
+   */
   awakeAt: number;
   lovedAt: number;
   item: LoveAnimalItem;
+  /**
+   * The sleep's un-boosted work with permanent boosts folded in. Present only on
+   * sleeps started under the speed-rate model; its absence selects the legacy
+   * baked `awakeAt` (the read path keys off the marker, NOT the flag). No
+   * `boostedTime` counterpart — animal sleep has no progress bar.
+   */
+  baseDurationMs?: number;
   multiplier?: number;
   reward?: Reward;
   feedBuff?: AnimalFeedBuff;
@@ -1994,6 +2030,16 @@ export type PetHouseBuilding = UpgradableBuilding & {
 export type Bank = {
   taxFreeSFL: number;
   withdrawnAmount: number;
+  /**
+   * How much of the player's FLOWER balance came from a deposit and has not
+   * been spent yet.
+   *
+   * Deposited FLOWER is never locked in the game - a player can always withdraw
+   * up to this amount without meeting the reputation requirement. Increases on
+   * deposit, decreases whenever FLOWER leaves the balance (spends, trades and
+   * withdrawals).
+   */
+  unlockedFlower?: number;
 };
 
 export type TemperateSeasonName = "spring" | "summer" | "autumn" | "winter";
@@ -2056,6 +2102,7 @@ export type BoostName =
 
 export type SpecialBoostName =
   | `${SeasonalEventName}`
+  | "Buckaroo"
   | "Power hour"
   | "VIP Access"
   | "Faction Pet"
@@ -2153,6 +2200,29 @@ export interface GameState {
   };
 
   verified?: boolean;
+
+  /**
+   * When the player last accepted the Terms & Conditions (epoch ms).
+   *
+   * Undefined for players who have never accepted them. Re-acceptance is
+   * forced once the acceptance is older than
+   * {@link TCS_ACKNOWLEDGEMENT_DURATION} - see the `termsAndConditions` state
+   * in `gameMachine`.
+   */
+  tcsAcknowledged?: number;
+
+  /**
+   * Anti-botting captcha progress. The API raises and lowers `required`.
+   * Per-game success/fail counts live in `farmActivity`.
+   */
+  captcha?: {
+    /** Whether the player must solve a captcha before continuing */
+    required?: boolean;
+    /** When the player last solved a captcha */
+    solvedAt?: number;
+    /** When the player last failed an attempt - drives the lockout */
+    failedAt?: number;
+  };
 
   gems: {
     history?: Record<string, { spent: number; coinsSpent?: number }>;
@@ -2358,7 +2428,11 @@ export interface GameState {
   desert: Desert;
 
   ban: {
-    status: "investigating" | "permanent" | "ok";
+    /**
+     * `lock` is a support hold. It blocks play like `investigating` does, but
+     * verifying socials or a face does not lift it - only support can.
+     */
+    status: "investigating" | "permanent" | "ok" | "lock";
     isSocialVerified?: boolean;
   };
 
@@ -2389,13 +2463,6 @@ export interface GameState {
   };
   season: Season;
   lavaPits: Record<string, LavaPit>;
-  /**
-   * Saved snapshots of the farm arrangement. The live farm is the "current"
-   * layout; these are the saved alternatives the player can load onto it.
-   * Optional so legacy saves (which never had this field) need no migration.
-   * Capped at {@link MAX_SAVED_LAYOUTS}.
-   */
-  layouts?: SavedLayout[];
   nfts?: Partial<Record<Chain, NFT>>;
 
   faceRecognition?: {
@@ -2454,6 +2521,19 @@ export interface GameState {
     shop: FloatingIslandShop;
     boughtAt?: Partial<Record<FloatingShopItemName, number>>;
     petalPuzzleSolvedAt?: number;
+    /**
+     * Love Charm prizes claimed from the daily island puzzles. Only the
+     * current UTC day's claims are kept - used to enforce the daily Love
+     * Charm cap and the maximum number of claims per day.
+     */
+    prizeClaims?: {
+      claimedAt: number;
+      amount: number;
+      /** Which puzzle paid out - lets the client enforce per-game rules. */
+      game?: FloatingIslandGameName;
+      /** The puzzle's round - each `{ game, roundId }` is claimable once. */
+      roundId?: number;
+    }[];
   };
   megastore?: {
     boughtAt: Partial<Record<ChapterTierItemName, number>>;
@@ -2471,9 +2551,6 @@ export interface GameState {
   socialFarming: SocialFarming;
   pets?: Pets;
 
-  prototypes?: {
-    leagues?: League;
-  };
   saltFarm: SaltFarm;
   sculptures?: Partial<
     Record<SculptureName, { level: number; upgradedAt?: number }>

@@ -2,7 +2,10 @@ import type { Schema, MapSchema, ArraySchema } from "@colyseus/schema";
 import type { NPCName } from "lib/npcs";
 import type { BumpkinParts } from "lib/utils/tokenUriBuilder";
 import type { SceneId } from "../mmoMachine";
-import type { Moderation } from "features/game/lib/gameMachine";
+// NOTE: `moderation` is deliberately absent from `Player` below, and should
+// stay that way. It was replicated behind a `@filter`, which forced the server
+// to re-encode the whole room separately for every client on every patch. The
+// MMO no longer carries moderation state at all.
 import type { FactionName } from "features/game/types/game";
 import type { PetNFTType } from "features/game/types/pets";
 
@@ -39,7 +42,6 @@ export interface Player extends Schema {
   clothing: BumpkinParts & { updatedAt: number };
   npc: NPCName;
   sceneId: SceneId;
-  moderation: Moderation;
 
   inputQueue: InputData[];
 }
@@ -130,6 +132,47 @@ export interface GiantFlower extends Schema {
   bottomPetal?: PetalState;
 }
 
+/**
+ * Love Island "Love Dilemma" round, published by the room while that puzzle
+ * is active. Rounds run on a fixed 40s clock (30s choose + 10s reveal).
+ */
+export interface LoveDilemma extends Schema {
+  roundId: number;
+  /** Epoch ms - end of the choose phase. */
+  chooseEndsAt: number;
+  /** Epoch ms - end of the reveal phase (start of the next round). */
+  revealEndsAt: number;
+  /** Tier (0 = best) shown on each platform, indexed by platform 0-2 (length 3). */
+  tiers: ArraySchema<number>;
+  /** How many players have locked in a choice this round. */
+  chosenCount: number;
+  /**
+   * sessionId -> platform. Kept EMPTY during the choose phase so nobody can
+   * see where the crowd is going; populated by the server at reveal.
+   */
+  choices: MapSchema<number>;
+}
+
+/**
+ * Love Island "Love Boulder", published by the love_island room. The whole
+ * island taps one boulder down from `hits` to zero; everyone who landed a
+ * hit that round can claim a Love Charm prize once a day.
+ */
+export interface LoveBoulder extends Schema {
+  /** Increments every time a fresh boulder appears. */
+  roundId: number;
+  /** Hits a fresh boulder starts with (1000). 0 means the room isn't running it. */
+  hits: number;
+  /** Hits still needed to break it. */
+  hitsRemaining: number;
+  /** Epoch ms the boulder broke; 0 while it's standing. */
+  brokenAt: number;
+  /** Epoch ms a fresh boulder appears; 0 while it's standing. */
+  respawnAt: number;
+  /** farmId -> hits landed this round. Proof of who helped. */
+  miners: MapSchema<number>;
+}
+
 export interface PlazaRoomState extends Schema {
   mapWidth: number;
   mapHeight: number;
@@ -149,4 +192,8 @@ export interface PlazaRoomState extends Schema {
 
   dogs: MapSchema<Dog>;
   giantFlower: GiantFlower;
+  /** Only present in the love_island room while the dilemma puzzle is on. */
+  loveDilemma?: LoveDilemma;
+  /** Only present in the love_island room. */
+  loveBoulder?: LoveBoulder;
 }

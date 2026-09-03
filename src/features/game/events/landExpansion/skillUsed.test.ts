@@ -3,6 +3,7 @@ import { skillUse, getSkillCooldown } from "./skillUsed";
 import { CROPS } from "features/game/types/crops";
 import { COOKABLES } from "features/game/types/consumables";
 import { FLOWER_SEEDS, FLOWERS } from "features/game/types/flowers";
+import { getFlowerReadyAt } from "features/game/lib/flowerBedReadiness";
 
 describe("skillUse", () => {
   const dateNow = Date.now();
@@ -671,6 +672,60 @@ describe("skillUse", () => {
       );
     });
 
+    it("makes windowed flowers ready at the use instant, even with a grow-time debuff", () => {
+      // Yellow Carnation (Sunpetal Seed) base = 24h. Flowery Abode's +50%
+      // growth-time debuff is baked into `baseDurationMs` at plant, so a
+      // windowed flower's duration can EXCEED the base grow time — back-dating
+      // `plantedAt` by the base time (the legacy fix-up) leaves the debuff
+      // excess still on the clock.
+      const growTimeMs =
+        FLOWER_SEEDS[FLOWERS["Yellow Carnation"].seed].plantSeconds * 1000;
+
+      const state = skillUse({
+        state: {
+          ...INITIAL_FARM,
+          bumpkin: {
+            ...INITIAL_FARM.bumpkin,
+            skills: { "Petal Blessed": 1 },
+          },
+          flowers: {
+            flowerBeds: {
+              debuffed: {
+                x: 1,
+                y: -10,
+                createdAt: 0,
+                flower: {
+                  name: "Yellow Carnation",
+                  plantedAt: dateNow - 60 * 60 * 1000,
+                  baseDurationMs: growTimeMs * 1.5,
+                },
+              },
+              plain: {
+                x: 1,
+                y: -9,
+                createdAt: 0,
+                flower: {
+                  name: "Yellow Carnation",
+                  plantedAt: dateNow - 60 * 60 * 1000,
+                  baseDurationMs: growTimeMs,
+                },
+              },
+            },
+            discovered: {},
+          },
+        },
+        action: { type: "skill.used", skill: "Petal Blessed" },
+        createdAt: dateNow,
+      });
+
+      // Ready exactly at the use instant (mirrors the legacy branch's
+      // `plantedAt + growTime === createdAt`, so beehives credit honey up to now).
+      const debuffed = state.flowers.flowerBeds["debuffed"].flower;
+      const plain = state.flowers.flowerBeds["plain"].flower;
+      expect(getFlowerReadyAt(debuffed!, state)).toEqual(dateNow);
+      expect(getFlowerReadyAt(plain!, state)).toEqual(dateNow);
+    });
+
     it("updates the beehives after a flower is instagrown", () => {
       const now = Date.now();
       const state = skillUse({
@@ -1078,6 +1133,74 @@ describe("skillUse", () => {
 
       expect(firePitRecipe?.readyAt).toEqual(dateNow);
       expect(smoothieShackRecipe?.readyAt).toEqual(dateNow);
+    });
+
+    // Same stale-cache trap as the gem speed-up: a recipe that has actually finished
+    // but whose cached `readyAt` still points into the future was treated as
+    // upcoming, restarted as the new head - and the recipe the player just spent the
+    // skill on ended up chained behind it instead of being ready.
+    it("does not restart a finished recipe whose cached readyAt is stale", () => {
+      const now = dateNow;
+      const HOUR = 60 * 60 * 1000;
+
+      const state = skillUse({
+        state: {
+          ...INITIAL_FARM,
+          bumpkin: {
+            ...INITIAL_FARM.bumpkin,
+            skills: { "Instant Gratification": 1 },
+          },
+          collectibles: {
+            ...INITIAL_FARM.collectibles,
+            "Gourmet Hourglass": [
+              {
+                id: "1",
+                coordinates: { x: 1, y: 1 },
+                createdAt: now - 2 * HOUR,
+                readyAt: now - 2 * HOUR,
+              },
+            ],
+          },
+          buildings: {
+            "Fire Pit": [
+              {
+                id: "1",
+                coordinates: { x: 0, y: 0 },
+                createdAt: 0,
+                readyAt: 0,
+                crafting: [
+                  // 4h of work at 2x: finished exactly now, but the cache was
+                  // written before the hourglass went down.
+                  {
+                    id: "head",
+                    name: "Boiled Eggs",
+                    startedAt: now - 2 * HOUR,
+                    baseDurationMs: 4 * HOUR,
+                    readyAt: now + 2 * HOUR,
+                  },
+                  // The one still cooking - this is what the skill completes.
+                  {
+                    id: "tail",
+                    name: "Mashed Potato",
+                    baseDurationMs: 2 * HOUR,
+                    readyAt: now + 4 * HOUR,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        action: { type: "skill.used", skill: "Instant Gratification" },
+        createdAt: now,
+      });
+
+      const queue = state.buildings["Fire Pit"]?.[0].crafting ?? [];
+
+      expect(queue).toHaveLength(2);
+      expect(queue[0].startedAt).toEqual(now - 2 * HOUR);
+      expect(queue[0].readyAt).toEqual(now);
+      // The recipe the skill was spent on is ready, not queued behind a restart.
+      expect(queue[1].readyAt).toEqual(now);
     });
 
     it("updates all the recipes readyAt times correctly", () => {

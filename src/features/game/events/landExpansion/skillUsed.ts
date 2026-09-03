@@ -6,6 +6,7 @@ import {
   getSkillLevel,
   isUpgradeableSkillName,
 } from "features/game/types/bumpkinSkills";
+import { getAnimalReadyAt } from "features/game/lib/animals";
 import { getKeys } from "lib/object";
 import type {
   GameState,
@@ -145,9 +146,21 @@ function usePetalBlessed({
     .forEach((bed) => {
       const { flower } = bed;
       if (flower) {
-        const growTime =
-          FLOWER_SEEDS[FLOWERS[flower.name].seed].plantSeconds * 1000;
-        flower.plantedAt = createdAt - growTime;
+        if (flower.baseDurationMs !== undefined) {
+          // Windowed (speed-rate model): zero the remaining work AND re-anchor
+          // the start to now so readyAt resolves to `createdAt` exactly.
+          // Back-dating plantedAt by the BASE grow time would instead re-price
+          // the grow against past boost windows — and leave a flower whose
+          // baked `baseDurationMs` EXCEEDS the base time (Flowery Abode's
+          // +growth-time debuff) still growing (mirrors instaGrowFlower).
+          flower.baseDurationMs = 0;
+          flower.plantedAt = createdAt;
+        } else {
+          // Legacy: back-date so plantedAt + base grow time === createdAt.
+          const growTime =
+            FLOWER_SEEDS[FLOWERS[flower.name].seed].plantSeconds * 1000;
+          flower.plantedAt = createdAt - growTime;
+        }
       }
     });
   return flowerBeds;
@@ -190,15 +203,20 @@ function useInstantGratification({
     const currentlyCooking = getCurrentCookingItem({
       building: building,
       createdAt,
+      game,
     });
 
     if (!currentlyCooking) return;
 
-    const recipeIndex = queue.findIndex(
-      (r) => r.readyAt === currentlyCooking.readyAt,
-    ) as number;
+    const recipeIndex = currentlyCooking.index;
 
     queue[recipeIndex].readyAt = createdAt;
+    // Windowed (`baseDurationMs` set): also zero the remaining work, or the queue
+    // resolver would re-derive this recipe's ready time from its start + duration and
+    // undo the instant completion (mirrors the oil reserve above / instaGrowFlower).
+    if (queue[recipeIndex].baseDurationMs !== undefined) {
+      queue[recipeIndex].baseDurationMs = 0;
+    }
 
     building.crafting = recalculateQueue({
       queue,
@@ -228,9 +246,11 @@ function useBarnyardRouse({
 
     // Process each animal
     Object.values(animals).forEach((animal) => {
-      const { awakeAt } = animal;
-      if (awakeAt < createdAt) return;
+      if (getAnimalReadyAt(animal, game) < createdAt) return;
       animal.awakeAt = createdAt;
+      // Drop the windowed marker so the wake time is exactly this instant rather
+      // than being re-derived from `asleepAt` + the shrine windows.
+      delete animal.baseDurationMs;
     });
   });
 
@@ -468,7 +488,7 @@ export function powerSkillDisabledConditions({
     case "Barnyard Rouse": {
       if (
         Object.values({ ...henHouseAnimals, ...barnAnimals }).every(
-          ({ awakeAt }) => awakeAt < createdAt,
+          (animal) => getAnimalReadyAt(animal, state) < createdAt,
         )
       ) {
         return {
