@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import { getFactionRankBoostAmount } from "features/game/lib/factionRanks";
 import {
   getFactionWearableBoostAmount,
@@ -128,16 +127,6 @@ export function completeKingdomChore({
     factionHistory.score += marks;
 
     faction.history[week] = factionHistory;
-
-    mfEconomy("kingdom_chore", {
-      outputs: [
-        {
-          type: "Mark",
-          before: previousMarks.toNumber(),
-          after: previousMarks.add(marks).toNumber(),
-        },
-      ],
-    });
 
     return game;
   });
