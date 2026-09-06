@@ -29,6 +29,32 @@ export function mfTrack(name: string, data?: Record<string, unknown>): void {
 }
 
 /**
+ * Like `mfTrack`, but also swallows a rejected `trackEvent` promise.
+ *
+ * `trackEvent` returns `postEvent`'s promise, so a network or collector
+ * failure surfaces as a rejection rather than a synchronous throw - which a
+ * bare try/catch never sees, leaving an unhandled rejection in the player's
+ * browser. Used for the schema-locked events below, where a call site is
+ * more likely to be a one-off (a purchase, a tutorial step) whose failure
+ * should stay silent.
+ */
+function mfTrackLocked(name: string, data: Record<string, unknown>): void {
+  try {
+    const result = MoonForgeAnalytics.trackEvent(name, data) as unknown;
+
+    if (result instanceof Promise) {
+      result.catch((e) => {
+        // eslint-disable-next-line no-console
+        console.log(`MoonForge analytics error: `, e);
+      });
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.log(`MoonForge analytics error: `, e);
+  }
+}
+
+/**
  * Tracks a screen/scene view.
  */
 export function mfScreen(name: string): void {
@@ -90,24 +116,165 @@ export function mfSetScene(sceneName: string): void {
  * already run.
  */
 export function mfExperiment(experimentId: string, variant: string): void {
-  try {
-    // `trackEvent` returns the underlying `postEvent` promise, so a network or
-    // collector failure surfaces as a rejection rather than a synchronous
-    // throw - which the catch below would never see. Without the rejection
-    // handler this produces an unhandled rejection in the player's browser.
-    const result = MoonForgeAnalytics.trackEvent("experiment_assigned", {
-      experiment_id: experimentId,
-      variant,
-    }) as unknown;
+  mfTrackLocked("experiment_assigned", {
+    experiment_id: experimentId,
+    variant,
+  });
+}
 
-    if (result instanceof Promise) {
-      result.catch((e) => {
-        // eslint-disable-next-line no-console
-        console.log(`MoonForge analytics error: `, e);
-      });
-    }
-  } catch (e) {
+/** One side of an economy transaction: a resource type and its balance
+ * before / after the change. `before` / `after` are optional for the ends
+ * that are not known (a free reward has no input balance, a pure sink has no
+ * output). */
+export type EconomyRow = { type: string; before?: number; after?: number };
+
+const ECONOMY_SLOTS = 3;
+
+function flattenEconomyRows(
+  data: Record<string, unknown>,
+  prefix: "input" | "output",
+  rows: EconomyRow[] | undefined,
+): void {
+  if (!rows || rows.length === 0) return;
+
+  if (rows.length > ECONOMY_SLOTS) {
     // eslint-disable-next-line no-console
-    console.log(`MoonForge analytics error: `, e);
+    console.warn(
+      `MoonForge economy_transaction: ${rows.length} ${prefix}s given but only ${ECONOMY_SLOTS} slots exist - the extras are dropped. Split this into multiple transactions.`,
+    );
+  }
+
+  rows.slice(0, ECONOMY_SLOTS).forEach((row, i) => {
+    const n = i + 1;
+    data[`${prefix}_${n}_type`] = row.type;
+    if (row.before !== undefined) data[`${prefix}_${n}_before`] = row.before;
+    if (row.after !== undefined) data[`${prefix}_${n}_after`] = row.after;
+  });
+}
+
+/**
+ * Records one economic state change as the canonical `economy_transaction`
+ * event. Game-specific meaning goes in `reason` (e.g. `harvest_crop`,
+ * `speed_up_building`), never in the event name.
+ *
+ * Up to 3 inputs and 3 outputs are sent as flat `input_N_type/before/after`
+ * and `output_N_type/before/after` keys. More than 3 of either is dropped
+ * with a warning - split into multiple transactions. Free reward -> omit
+ * `inputs`; sink with no grant -> omit `outputs`.
+ */
+export function mfEconomy(
+  reason: string,
+  opts?: { inputs?: EconomyRow[]; outputs?: EconomyRow[] },
+): void {
+  const data: Record<string, unknown> = { reason };
+  flattenEconomyRows(data, "input", opts?.inputs);
+  flattenEconomyRows(data, "output", opts?.outputs);
+  mfTrackLocked("economy_transaction", data);
+}
+
+/** Locked revenue event: the player has entered a purchase / checkout flow. */
+export function mfIapInitiated(p: {
+  product_id: string;
+  price: number;
+  currency: string;
+  product_name?: string;
+  store?: string;
+}): void {
+  const data: Record<string, unknown> = {
+    product_id: p.product_id,
+    price: p.price,
+    currency: p.currency,
+  };
+  if (p.product_name !== undefined) data.product_name = p.product_name;
+  if (p.store !== undefined) data.store = p.store;
+  mfTrackLocked("iap_initiated", data);
+}
+
+/** Locked revenue event: a purchase has succeeded. `transaction_id` is
+ * required - reuse the real id the payment flow already generated so a
+ * double-fired success callback de-duplicates. */
+export function mfIapCompleted(p: {
+  product_id: string;
+  price: number;
+  currency: string;
+  transaction_id: string;
+  product_name?: string;
+  store?: string;
+}): void {
+  const data: Record<string, unknown> = {
+    product_id: p.product_id,
+    price: p.price,
+    currency: p.currency,
+    transaction_id: p.transaction_id,
+  };
+  if (p.product_name !== undefined) data.product_name = p.product_name;
+  if (p.store !== undefined) data.store = p.store;
+  mfTrackLocked("iap_completed", data);
+}
+
+/** Locked FTUE event: the onboarding flow has begun. */
+export function mfTutorialStart(): void {
+  mfTrackLocked("tutorial_start", {});
+}
+
+/** Locked FTUE event: the onboarding flow has ended, however it ended. */
+export function mfTutorialComplete(outcome?: "completed" | "skipped"): void {
+  mfTrackLocked("tutorial_complete", outcome === undefined ? {} : { outcome });
+}
+
+export type SignupMethod =
+  | "email"
+  | "social"
+  | "platform"
+  | "guest_upgrade"
+  | "other";
+
+export type SignupInfo = { signup_method: SignupMethod; provider?: string };
+
+/**
+ * Locked account event: a signup has completed.
+ *
+ * Call `mfIdentify` first, then this - two separate calls, in that order,
+ * never inferred from `mfIdentify` alone. A returning player's first
+ * `mfIdentify` on a new device is a login, not a signup.
+ */
+export function mfAccountCreated(p: SignupInfo): void {
+  const data: Record<string, unknown> = { signup_method: p.signup_method };
+  if (p.provider !== undefined) data.provider = p.provider;
+  mfTrackLocked("account_created", data);
+}
+
+const SIGNUP_PENDING_KEY = "mf_signup_pending";
+
+/**
+ * Records that a signup just completed.
+ *
+ * `account_created` must fire *after* `mfIdentify` and with the real analytics
+ * id, but signup finishes in the auth machine while `mfIdentify` only runs
+ * later in the game machine's `initialiseAnalytics`. The auth machine leaves
+ * this marker; the game machine turns it into the event via
+ * `consumeSignupPending`. localStorage rather than a module variable so it
+ * survives the auth -> game reload.
+ */
+export function markSignupPending(info: SignupInfo): void {
+  try {
+    localStorage.setItem(SIGNUP_PENDING_KEY, JSON.stringify(info));
+  } catch {
+    // Never throws into auth code.
+  }
+}
+
+/**
+ * Reads and clears the signup marker. `undefined` in the common case - a
+ * returning player logging in wrote no marker, so no spurious `account_created`.
+ */
+export function consumeSignupPending(): SignupInfo | undefined {
+  try {
+    const raw = localStorage.getItem(SIGNUP_PENDING_KEY);
+    if (raw === null) return undefined;
+    localStorage.removeItem(SIGNUP_PENDING_KEY);
+    return JSON.parse(raw) as SignupInfo;
+  } catch {
+    return undefined;
   }
 }

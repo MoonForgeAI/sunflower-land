@@ -2,6 +2,7 @@ import { CONFIG } from "lib/config";
 import { fromWei } from "web3-utils";
 import ABI from "./abis/BuyGems";
 import { onboardingAnalytics } from "lib/onboardingAnalytics";
+import { mfIapCompleted } from "lib/moonforgeAnalytics";
 import { waitForTransactionReceipt, writeContract } from "@wagmi/core";
 import { config } from "features/wallet/WalletProvider";
 import { polygon, polygonAmoy } from "viem/chains";
@@ -42,11 +43,13 @@ export async function buyGemsMATIC({
   });
   await waitForTransactionReceipt(config, { hash });
 
+  const maticValue = Number(fromWei(fee.toString()));
+
   onboardingAnalytics.logEvent("purchase", {
     currency: "MATIC",
     // Unique ID to prevent duplicate events
     transaction_id: `${Date.now()}-${farmId}`,
-    value: Number(fromWei(fee.toString())),
+    value: maticValue,
     items: [
       {
         item_id: "Gem",
@@ -54,5 +57,15 @@ export async function buyGemsMATIC({
         quantity: amount,
       },
     ],
+  });
+
+  // `amount` is the gem count, matching the fiat SKUs' `gems_<count>` shape.
+  // The on-chain tx hash is the natural, real `transaction_id`.
+  mfIapCompleted({
+    product_id: `gems_${amount}`,
+    price: maticValue,
+    currency: "MATIC",
+    transaction_id: hash,
+    store: "web",
   });
 }

@@ -1,10 +1,16 @@
 import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
 import {
+  mfAccountCreated,
+  mfEconomy,
   mfExperiment,
+  mfIapCompleted,
+  mfIapInitiated,
   mfIdentify,
   mfScreen,
   mfSetScene,
   mfTrack,
+  mfTutorialComplete,
+  mfTutorialStart,
 } from "./moonforgeAnalytics";
 
 const TEST_GAME_ID = "00000000-0000-4000-8000-000000000000";
@@ -177,6 +183,141 @@ describe("moonforgeAnalytics", () => {
         mfExperiment("purchase_prompt_holdout", "control"),
       ).not.toThrow();
 
+      spy.mockRestore();
+    });
+
+    const eventOf = () =>
+      JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body).payload;
+
+    describe("mfEconomy", () => {
+      it("posts economy_transaction with flattened input and output rows", () => {
+        mfEconomy("speed_up_building", {
+          inputs: [{ type: "Gem", before: 10, after: 7 }],
+          outputs: [{ type: "Basic Building", before: 0, after: 1 }],
+        });
+
+        const { name, data } = eventOf();
+        expect(name).toBe("economy_transaction");
+        expect(data).toMatchObject({
+          reason: "speed_up_building",
+          input_1_type: "Gem",
+          input_1_before: 10,
+          input_1_after: 7,
+          output_1_type: "Basic Building",
+          output_1_before: 0,
+          output_1_after: 1,
+        });
+      });
+
+      it("omits before / after for the ends that are not known", () => {
+        mfEconomy("daily_reward", { outputs: [{ type: "Coin", after: 250 }] });
+
+        const { data } = eventOf();
+        expect(data).toMatchObject({
+          reason: "daily_reward",
+          output_1_type: "Coin",
+          output_1_after: 250,
+        });
+        expect(data).not.toHaveProperty("output_1_before");
+        expect(data).not.toHaveProperty("input_1_type");
+      });
+
+      it("keeps the first 3 rows and warns about the rest", () => {
+        const warnSpy = jest.spyOn(console, "warn");
+
+        mfEconomy("cook_food", {
+          inputs: [
+            { type: "Sunflower", before: 4, after: 3 },
+            { type: "Potato", before: 4, after: 3 },
+            { type: "Pumpkin", before: 4, after: 3 },
+            { type: "Carrot", before: 4, after: 3 },
+          ],
+        });
+
+        const { data } = eventOf();
+        expect(data.input_3_type).toBe("Pumpkin");
+        expect(data).not.toHaveProperty("input_4_type");
+        expect(warnSpy).toHaveBeenCalled();
+      });
+    });
+
+    it("mfIapInitiated posts iap_initiated with the required keys", () => {
+      mfIapInitiated({ product_id: "gems_500", price: 4.99, currency: "USD" });
+
+      const { name, data } = eventOf();
+      expect(name).toBe("iap_initiated");
+      expect(data).toMatchObject({
+        product_id: "gems_500",
+        price: 4.99,
+        currency: "USD",
+      });
+    });
+
+    it("mfIapCompleted includes the transaction_id so a double callback de-dupes", () => {
+      mfIapCompleted({
+        product_id: "gems_500",
+        price: 4.99,
+        currency: "USD",
+        transaction_id: "txn_abc",
+        store: "web",
+      });
+
+      const { name, data } = eventOf();
+      expect(name).toBe("iap_completed");
+      expect(data).toMatchObject({
+        product_id: "gems_500",
+        transaction_id: "txn_abc",
+        store: "web",
+      });
+    });
+
+    it("mfTutorialStart / mfTutorialComplete send the locked names", () => {
+      mfTutorialStart();
+      expect(eventOf().name).toBe("tutorial_start");
+
+      fetchMock.mockClear();
+      mfTutorialComplete("completed");
+      expect(eventOf()).toMatchObject({
+        name: "tutorial_complete",
+        data: { outcome: "completed" },
+      });
+    });
+
+    it("mfAccountCreated sends signup_method and optional provider", () => {
+      mfAccountCreated({ signup_method: "social", provider: "google" });
+
+      const { name, data } = eventOf();
+      expect(name).toBe("account_created");
+      expect(data).toMatchObject({
+        signup_method: "social",
+        provider: "google",
+      });
+    });
+
+    it("the locked helpers swallow a rejected trackEvent without an unhandled rejection", async () => {
+      const spy = jest
+        .spyOn(MoonForgeAnalytics, "trackEvent")
+        .mockReturnValue(Promise.reject(new Error("collector down")) as never);
+
+      const unhandled: unknown[] = [];
+      const onUnhandled = (e: unknown) => unhandled.push(e);
+      process.on("unhandledRejection", onUnhandled);
+
+      expect(() => {
+        mfEconomy("daily_reward", { outputs: [{ type: "Coin", after: 1 }] });
+        mfIapCompleted({
+          product_id: "p",
+          price: 1,
+          currency: "USD",
+          transaction_id: "t",
+        });
+        mfAccountCreated({ signup_method: "other" });
+      }).not.toThrow();
+
+      await new Promise((r) => setTimeout(r, 10));
+      process.off("unhandledRejection", onUnhandled);
+
+      expect(unhandled).toHaveLength(0);
       spy.mockRestore();
     });
   });
