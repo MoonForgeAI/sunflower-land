@@ -172,6 +172,45 @@ export function mfEconomy(
   mfTrackLocked("economy_transaction", data);
 }
 
+type CurrencyBalance = { before: number; after: number };
+
+/**
+ * Shorthand for the common case where an economic change only moved the
+ * standard currency balances (a reward claim, a currency-only purchase or
+ * exchange). Pass the before/after of each balance that could have moved -
+ * ones that did not move are dropped. `direction` puts the moved balances on
+ * the input side (a spend) or the output side (a grant).
+ *
+ * For anything that also moves inventory items, use `mfEconomy` directly.
+ */
+export function mfCurrencyChange(
+  reason: string,
+  direction: "grant" | "spend",
+  balances: {
+    coin?: CurrencyBalance;
+    sfl?: CurrencyBalance;
+    gem?: CurrencyBalance;
+    flower?: CurrencyBalance;
+  },
+): void {
+  const rows: EconomyRow[] = [];
+  const add = (type: string, b?: CurrencyBalance) => {
+    if (b && b.before !== b.after)
+      rows.push({ type, before: b.before, after: b.after });
+  };
+  add("Coin", balances.coin);
+  add("SFL", balances.sfl);
+  add("Gem", balances.gem);
+  add("FLOWER", balances.flower);
+
+  if (rows.length === 0) return;
+
+  mfEconomy(
+    reason,
+    direction === "grant" ? { outputs: rows } : { inputs: rows },
+  );
+}
+
 /** Locked revenue event: the player has entered a purchase / checkout flow. */
 export function mfIapInitiated(p: {
   product_id: string;

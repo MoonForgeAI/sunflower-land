@@ -1,6 +1,7 @@
 import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
 import {
   mfAccountCreated,
+  mfCurrencyChange,
   mfEconomy,
   mfExperiment,
   mfIapCompleted,
@@ -238,6 +239,45 @@ describe("moonforgeAnalytics", () => {
         expect(data.input_3_type).toBe("Pumpkin");
         expect(data).not.toHaveProperty("input_4_type");
         expect(warnSpy).toHaveBeenCalled();
+      });
+    });
+
+    describe("mfCurrencyChange", () => {
+      it("puts moved balances on the output side for a grant", () => {
+        mfCurrencyChange("daily_reward", "grant", {
+          coin: { before: 100, after: 350 },
+          sfl: { before: 5, after: 5 },
+        });
+
+        const { name, data } = eventOf();
+        expect(name).toBe("economy_transaction");
+        expect(data).toMatchObject({
+          reason: "daily_reward",
+          output_1_type: "Coin",
+          output_1_before: 100,
+          output_1_after: 350,
+        });
+        // SFL did not move - dropped.
+        expect(data).not.toHaveProperty("output_2_type");
+      });
+
+      it("puts moved balances on the input side for a spend", () => {
+        mfCurrencyChange("speed_up_building", "spend", {
+          gem: { before: 10, after: 7 },
+        });
+
+        const { data } = eventOf();
+        expect(data).toMatchObject({
+          reason: "speed_up_building",
+          input_1_type: "Gem",
+          input_1_before: 10,
+          input_1_after: 7,
+        });
+      });
+
+      it("sends nothing when no balance moved", () => {
+        mfCurrencyChange("noop", "grant", { coin: { before: 1, after: 1 } });
+        expect(fetchMock).not.toHaveBeenCalled();
       });
     });
 
