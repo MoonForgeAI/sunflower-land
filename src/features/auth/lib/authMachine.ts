@@ -60,8 +60,9 @@ const trackAccountAuthCompleted = () => trackAuthCompleted("account");
 /**
  * Leave a marker that a signup just finished, for the game machine to emit as
  * `account_created` once the player is identified. The token from `signUp`
- * carries the SSO `provider` (absent for wallet sessions) and `email`, which
- * map to the locked `signup_method` enum.
+ * carries the new `farmId` (so the marker is scoped to it), the SSO `provider`
+ * (absent for wallet sessions) and `email`, which map to the locked
+ * `signup_method` enum.
  *
  * Fires from `creating.onDone` (the account genuinely exists), never from
  * `authorising` (only authorised) or from pressing a welcome-screen button
@@ -69,9 +70,12 @@ const trackAccountAuthCompleted = () => trackAuthCompleted("account");
  */
 const markSignupCompleted = (_: unknown, event: any) => {
   const token = decodeToken(event.data.token as string);
+  if (token.farmId === undefined) return;
+
   const provider = token.provider;
 
   markSignupPending(
+    token.farmId,
     provider
       ? { signup_method: "social", provider }
       : { signup_method: token.email ? "email" : "platform" },

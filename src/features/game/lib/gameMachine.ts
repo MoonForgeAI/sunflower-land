@@ -2870,12 +2870,13 @@ export function startGame(authContext: AuthContext) {
             });
             mfSetUser(`account${event.data.analyticsId}`);
 
-            // A signup marker means this session immediately follows account
-            // creation on this device. Emit `account_created` (after identify,
-            // per the telemetry contract) and `tutorial_start` now. Consuming
-            // the marker deletes it, so both fire exactly once - a returning
-            // player logging in wrote no marker and produces neither.
-            const signup = consumeSignupPending();
+            // A signup marker for THIS farm means this session immediately
+            // follows its creation on this device. Emit `account_created`
+            // (after identify, per the telemetry contract) and `tutorial_start`
+            // now. Consuming the marker deletes it, so both fire exactly once -
+            // a returning player logging in wrote no marker, and a marker left
+            // by a different farm's interrupted signup is not matched here.
+            const signup = consumeSignupPending(context.farmId);
             if (signup) {
               mfAccountCreated(signup);
               mfTutorialStart();

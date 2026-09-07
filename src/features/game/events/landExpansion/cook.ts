@@ -342,15 +342,12 @@ export function cook({
     );
 
     mfEconomy("cook_food", {
-      inputs: Object.entries(ingredients)
-        .slice(0, 3)
-        .map(([ingredient, amount]) => {
-          const before = (
-            inventoryBeforeCook[ingredient as InventoryItemName] ??
-            new Decimal(0)
-          ).toNumber();
-          return { type: ingredient, before, after: before - Number(amount) };
-        }),
+      inputs: Object.entries(ingredients).map(([ingredient, amount]) => {
+        const before = (
+          inventoryBeforeCook[ingredient as InventoryItemName] ?? new Decimal(0)
+        ).toNumber();
+        return { type: ingredient, before, after: before - Number(amount) };
+      }),
       outputs: [{ type: item }],
     });
 

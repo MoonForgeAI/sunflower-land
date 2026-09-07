@@ -695,7 +695,6 @@ export function deliverOrder({
     const deliveryInputs: { type: string; before?: number; after?: number }[] =
       getKeys(order.items)
         .filter((name) => name !== "coins" && name !== "sfl")
-        .slice(0, 3)
         .map((name) => ({ type: name }));
     const deliveryOutputs: { type: string; before?: number; after?: number }[] =
       [];

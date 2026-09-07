@@ -157,9 +157,9 @@ export function buyResource({
           after: game.inventory.Sunstone.toNumber(),
         },
       ],
-      outputs: getObjectEntries(node.items)
-        .slice(0, 3)
-        .map(([item]) => ({ type: item as string })),
+      outputs: getObjectEntries(node.items).map(([item]) => ({
+        type: item as string,
+      })),
     });
 
     return game;

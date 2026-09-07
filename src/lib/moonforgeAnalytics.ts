@@ -128,23 +128,12 @@ export function mfExperiment(experimentId: string, variant: string): void {
  * output). */
 export type EconomyRow = { type: string; before?: number; after?: number };
 
-const ECONOMY_SLOTS = 3;
-
 function flattenEconomyRows(
   data: Record<string, unknown>,
   prefix: "input" | "output",
   rows: EconomyRow[] | undefined,
 ): void {
-  if (!rows || rows.length === 0) return;
-
-  if (rows.length > ECONOMY_SLOTS) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `MoonForge economy_transaction: ${rows.length} ${prefix}s given but only ${ECONOMY_SLOTS} slots exist - the extras are dropped. Split this into multiple transactions.`,
-    );
-  }
-
-  rows.slice(0, ECONOMY_SLOTS).forEach((row, i) => {
+  rows?.forEach((row, i) => {
     const n = i + 1;
     data[`${prefix}_${n}_type`] = row.type;
     if (row.before !== undefined) data[`${prefix}_${n}_before`] = row.before;
@@ -157,10 +146,11 @@ function flattenEconomyRows(
  * event. Game-specific meaning goes in `reason` (e.g. `harvest_crop`,
  * `speed_up_building`), never in the event name.
  *
- * Up to 3 inputs and 3 outputs are sent as flat `input_N_type/before/after`
- * and `output_N_type/before/after` keys. More than 3 of either is dropped
- * with a warning - split into multiple transactions. Free reward -> omit
- * `inputs`; sink with no grant -> omit `outputs`.
+ * Every input and output is sent as flat `input_N_type/before/after` and
+ * `output_N_type/before/after` keys - `N` is unbounded on the collector, so a
+ * change with many sides (a land expansion costing 8 resources, a 6-ingredient
+ * collectible) is emitted whole, in one event. Free reward -> omit `inputs`;
+ * sink with no grant -> omit `outputs`.
  */
 export function mfEconomy(
   reason: string,
@@ -283,35 +273,47 @@ export function mfAccountCreated(p: SignupInfo): void {
   mfTrackLocked("account_created", data);
 }
 
-const SIGNUP_PENDING_KEY = "mf_signup_pending";
+const signupPendingKey = (farmId: number | string) =>
+  `mf_signup_pending_${farmId}`;
 
 /**
- * Records that a signup just completed.
+ * Records that a signup just completed, keyed to the new farm.
  *
  * `account_created` must fire *after* `mfIdentify` and with the real analytics
  * id, but signup finishes in the auth machine while `mfIdentify` only runs
  * later in the game machine's `initialiseAnalytics`. The auth machine leaves
  * this marker; the game machine turns it into the event via
- * `consumeSignupPending`. localStorage rather than a module variable so it
- * survives the auth -> game reload.
+ * `consumeSignupPending(farmId)`. localStorage rather than a module variable so
+ * it survives the auth -> game reload.
+ *
+ * Scoped per farm so a marker orphaned by an interrupted first load can only
+ * ever be consumed by the farm it belongs to - never by the next, unrelated
+ * account to sign in on the same browser.
  */
-export function markSignupPending(info: SignupInfo): void {
+export function markSignupPending(
+  farmId: number | string,
+  info: SignupInfo,
+): void {
   try {
-    localStorage.setItem(SIGNUP_PENDING_KEY, JSON.stringify(info));
+    localStorage.setItem(signupPendingKey(farmId), JSON.stringify(info));
   } catch {
     // Never throws into auth code.
   }
 }
 
 /**
- * Reads and clears the signup marker. `undefined` in the common case - a
- * returning player logging in wrote no marker, so no spurious `account_created`.
+ * Reads and clears this farm's signup marker. `undefined` in the common case -
+ * a returning player logging in wrote no marker (and a stale marker for a
+ * *different* farm is left untouched), so no spurious `account_created`.
  */
-export function consumeSignupPending(): SignupInfo | undefined {
+export function consumeSignupPending(
+  farmId: number | string,
+): SignupInfo | undefined {
   try {
-    const raw = localStorage.getItem(SIGNUP_PENDING_KEY);
+    const key = signupPendingKey(farmId);
+    const raw = localStorage.getItem(key);
     if (raw === null) return undefined;
-    localStorage.removeItem(SIGNUP_PENDING_KEY);
+    localStorage.removeItem(key);
     return JSON.parse(raw) as SignupInfo;
   } catch {
     return undefined;

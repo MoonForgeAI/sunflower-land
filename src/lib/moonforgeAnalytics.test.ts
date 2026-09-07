@@ -1,5 +1,7 @@
 import { MoonForgeAnalytics, MoonForgeErrorTracker } from "lib/moonforge";
 import {
+  consumeSignupPending,
+  markSignupPending,
   mfAccountCreated,
   mfCurrencyChange,
   mfEconomy,
@@ -190,6 +192,11 @@ describe("moonforgeAnalytics", () => {
     const eventOf = () =>
       JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body).payload;
 
+    const eventsOf = () =>
+      fetchMock.mock.calls.map(
+        (call) => JSON.parse((call[1] as { body: string }).body).payload,
+      );
+
     describe("mfEconomy", () => {
       it("posts economy_transaction with flattened input and output rows", () => {
         mfEconomy("speed_up_building", {
@@ -223,22 +230,33 @@ describe("moonforgeAnalytics", () => {
         expect(data).not.toHaveProperty("input_1_type");
       });
 
-      it("keeps the first 3 rows and warns about the rest", () => {
-        const warnSpy = jest.spyOn(console, "warn");
-
-        mfEconomy("cook_food", {
+      it("emits every input/output in one event - no cap, nothing dropped", () => {
+        mfEconomy("craft_collectible", {
           inputs: [
+            { type: "Coin", before: 100, after: 90 },
             { type: "Sunflower", before: 4, after: 3 },
             { type: "Potato", before: 4, after: 3 },
             { type: "Pumpkin", before: 4, after: 3 },
             { type: "Carrot", before: 4, after: 3 },
           ],
+          outputs: [{ type: "Scary Mike", before: 0, after: 1 }],
         });
 
-        const { data } = eventOf();
-        expect(data.input_3_type).toBe("Pumpkin");
-        expect(data).not.toHaveProperty("input_4_type");
-        expect(warnSpy).toHaveBeenCalled();
+        const events = eventsOf();
+        expect(events).toHaveLength(1);
+        expect(events[0].name).toBe("economy_transaction");
+        expect(events[0].data).toMatchObject({
+          reason: "craft_collectible",
+          input_1_type: "Coin",
+          input_1_before: 100,
+          input_1_after: 90,
+          input_2_type: "Sunflower",
+          input_3_type: "Potato",
+          input_4_type: "Pumpkin",
+          input_5_type: "Carrot",
+          input_5_after: 3,
+          output_1_type: "Scary Mike",
+        });
       });
     });
 
@@ -331,6 +349,28 @@ describe("moonforgeAnalytics", () => {
       expect(data).toMatchObject({
         signup_method: "social",
         provider: "google",
+      });
+    });
+
+    describe("signup marker (farm-scoped)", () => {
+      afterEach(() => localStorage.clear());
+
+      it("consumes only the marker for the matching farm, then clears it", () => {
+        markSignupPending(42, { signup_method: "email" });
+
+        expect(consumeSignupPending(99)).toBeUndefined();
+        expect(consumeSignupPending(42)).toEqual({ signup_method: "email" });
+        // consumed - gone now
+        expect(consumeSignupPending(42)).toBeUndefined();
+      });
+
+      it("leaves another farm's stale marker untouched", () => {
+        markSignupPending(1, { signup_method: "platform" });
+
+        // A different account signs in on the same browser - no false signup.
+        expect(consumeSignupPending(2)).toBeUndefined();
+        // Farm 1's marker is still there for whenever farm 1 loads.
+        expect(consumeSignupPending(1)).toEqual({ signup_method: "platform" });
       });
     });
 

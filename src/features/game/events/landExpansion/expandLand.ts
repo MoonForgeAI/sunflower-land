@@ -153,16 +153,14 @@ export function expandLand({ state, createdAt = Date.now() }: Options) {
         after: game.coins,
       });
     }
-    getKeys(requirements.resources)
-      .slice(0, 2)
-      .forEach((name) => {
-        const before = (resourcesBefore[name] ?? new Decimal(0)).toNumber();
-        expandInputs.push({
-          type: name,
-          before,
-          after: (game.inventory[name] ?? new Decimal(0)).toNumber(),
-        });
+    getKeys(requirements.resources).forEach((name) => {
+      const before = (resourcesBefore[name] ?? new Decimal(0)).toNumber();
+      expandInputs.push({
+        type: name,
+        before,
+        after: (game.inventory[name] ?? new Decimal(0)).toNumber(),
       });
+    });
     // Input-only: the Basic Land is granted later, on `revealLand`.
     mfEconomy("expand_land", { inputs: expandInputs });
 
