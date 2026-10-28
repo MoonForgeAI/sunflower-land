@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import { makeAnimalBuildingKey } from "features/game/lib/animals";
 import { isCollectibleBuilt } from "features/game/lib/collectibleBuilt";
 import {
@@ -204,7 +203,6 @@ export function buyAnimal({
       throw new Error("You do not have the capacity for this animal");
     }
 
-    const coinsBefore = copy.coins;
     copy.coins -= price;
 
     copy[buildingKey].animals[action.id] = {
@@ -233,10 +231,6 @@ export function buyAnimal({
       game: copy,
       boostNames: boostsUsed,
       createdAt,
-    });
-
-    mfCurrencyChange("buy_animal", "spend", {
-      coin: { before: coinsBefore, after: copy.coins },
     });
 
     return copy;

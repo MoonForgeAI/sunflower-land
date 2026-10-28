@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import { getKeys } from "lib/object";
 import type { GameState } from "../types/game";
 
@@ -104,8 +103,6 @@ export function claimAirdrop({
     });
   }
 
-  const coinsBefore = game.coins;
-  const sflBefore = game.balance.toNumber();
   game.balance = game.balance.add(airdrop.sfl);
   game.airdrops = game.airdrops.filter((item) => item.id !== action.id);
   game.coins = game.coins + (airdrop.coins ?? 0);
@@ -266,11 +263,6 @@ export function claimAirdrop({
         }
       });
     }
-  });
-
-  mfCurrencyChange("claim_airdrop", "grant", {
-    coin: { before: coinsBefore, after: game.coins },
-    sfl: { before: sflBefore, after: game.balance.toNumber() },
   });
 
   return game;

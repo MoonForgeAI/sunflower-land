@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import { hasRequiredIslandExpansion } from "features/game/lib/hasRequiredIslandExpansion";
 import { trackFarmActivity } from "features/game/types/farmActivity";
 import type {
@@ -455,23 +454,6 @@ export function mineIron({
     });
     delete ironRock.stone.amount;
     delete ironRock.stone.criticalHit;
-
-    mfEconomy("mine_resource", {
-      inputs: [
-        {
-          type: "Stone Pickaxe",
-          before: toolAmount.toNumber(),
-          after: stateCopy.inventory["Stone Pickaxe"].toNumber(),
-        },
-      ],
-      outputs: [
-        {
-          type: "Iron",
-          before: amountInInventory.toNumber(),
-          after: stateCopy.inventory.Iron.toNumber(),
-        },
-      ],
-    });
 
     return stateCopy;
   });

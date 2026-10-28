@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import {
   isWithinAOE,
   type Position,
@@ -479,23 +478,6 @@ export function mineGold({
 
     delete goldRock.stone.amount;
     delete goldRock.stone.criticalHit;
-
-    mfEconomy("mine_resource", {
-      inputs: [
-        {
-          type: "Iron Pickaxe",
-          before: toolAmount.toNumber(),
-          after: inventory["Iron Pickaxe"].toNumber(),
-        },
-      ],
-      outputs: [
-        {
-          type: "Gold",
-          before: amountInInventory.toNumber(),
-          after: inventory.Gold.toNumber(),
-        },
-      ],
-    });
 
     return stateCopy;
   });

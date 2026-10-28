@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import type {
   DailyRewards,
   GameState,
@@ -142,9 +141,6 @@ export function claimDailyReward({
       now: createdAt,
     });
 
-    const coinsBefore = game.coins;
-    const sflBefore = game.balance.toNumber();
-
     rewards.forEach((reward) => applyReward(game, reward, createdAt));
 
     // VIP bonus daily reward (1 consumable based on level)
@@ -191,11 +187,6 @@ export function claimDailyReward({
       game,
       boostNames: boosts,
       createdAt,
-    });
-
-    mfCurrencyChange("daily_reward", "grant", {
-      coin: { before: coinsBefore, after: game.coins },
-      sfl: { before: sflBefore, after: game.balance.toNumber() },
     });
   });
 }

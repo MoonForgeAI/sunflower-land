@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import type { GameState, InventoryItemName } from "features/game/types/game";
 
 import { produce } from "immer";
@@ -276,8 +275,6 @@ export function buyChapterItem({
     }
 
     // Deduct resources
-    const coinsBefore = currentCoins;
-    const sflBefore = copy.balance.toNumber();
     copy.balance = copy.balance.minus(_sfl);
     if (_sfl.gt(0)) {
       copy.farmActivity = trackFarmActivity(
@@ -334,11 +331,6 @@ export function buyChapterItem({
         },
       };
     }
-
-    mfCurrencyChange("buy_chapter_item", "spend", {
-      coin: { before: coinsBefore, after: copy.coins },
-      sfl: { before: sflBefore, after: copy.balance.toNumber() },
-    });
 
     return copy;
   });

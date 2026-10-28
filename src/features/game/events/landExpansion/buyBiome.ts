@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import { getObjectEntries } from "lib/object";
 import { hasRequiredIslandExpansion } from "features/game/lib/hasRequiredIslandExpansion";
 import { trackFarmActivity } from "features/game/types/farmActivity";
@@ -75,11 +74,6 @@ export function buyBiome({
 
     game.inventory[biome] = biomeCount.add(1);
     game.farmActivity = trackFarmActivity(`${biome} Bought`, game.farmActivity);
-
-    mfCurrencyChange("buy_biome", "spend", {
-      sfl: { before: balance.toNumber(), after: game.balance.toNumber() },
-    });
-
     return game;
   });
 }

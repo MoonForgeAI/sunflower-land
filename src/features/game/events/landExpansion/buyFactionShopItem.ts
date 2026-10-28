@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import type { BumpkinItem } from "features/game/types/bumpkin";
 import {
   type FactionShopItemName,
@@ -135,17 +134,6 @@ export function buyFactionShopItem({
       `${action.item} Bought`,
       stateCopy.farmActivity,
     );
-
-    mfEconomy("buy_faction_shop_item", {
-      inputs: [
-        {
-          type: "Mark",
-          before: marksBalance.toNumber(),
-          after: marksBalance.minus(price).toNumber(),
-        },
-      ],
-      outputs: [{ type: action.item }],
-    });
 
     return stateCopy;
   });

@@ -4,7 +4,6 @@ import { BUMPKIN_GIFTS, type BumpkinGift } from "features/game/types/gifts";
 import { getKeys } from "lib/object";
 import Decimal from "decimal.js-light";
 import { produce } from "immer";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import {
   type RecipeCollectibleName,
   RECIPES,
@@ -142,12 +141,7 @@ export function claimGift({ state, action, createdAt = Date.now() }: Options) {
       });
     }
 
-    const coinsBefore = game.coins;
     game.coins = game.coins + nextGift.coins;
-
-    mfCurrencyChange("bumpkin_gift", "grant", {
-      coin: { before: coinsBefore, after: game.coins },
-    });
 
     return game;
   });

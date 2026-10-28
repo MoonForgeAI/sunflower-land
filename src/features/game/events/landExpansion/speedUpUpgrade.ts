@@ -11,7 +11,6 @@ import {
   type SpeedUpPaymentMethod,
 } from "features/game/lib/getInstantGems";
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 
 export type SpeedUpUpgradeAction = {
   type: "upgrade.spedUp";
@@ -48,9 +47,6 @@ export function speedUpUpgrade({
       game,
     });
 
-    const coinsBefore = game.coins;
-    const gemsBefore = (game.inventory["Gem"] ?? new Decimal(0)).toNumber();
-
     if (action.paymentMethod === "coins") {
       game = chargeCoinsForSpeedUp({ game, gems, createdAt });
     } else {
@@ -65,14 +61,6 @@ export function speedUpUpgrade({
     }
 
     game[buildingKey].upgradeReadyAt = createdAt;
-
-    mfCurrencyChange("speed_up_upgrade", "spend", {
-      coin: { before: coinsBefore, after: game.coins },
-      gem: {
-        before: gemsBefore,
-        after: (game.inventory["Gem"] ?? new Decimal(0)).toNumber(),
-      },
-    });
 
     return game;
   });

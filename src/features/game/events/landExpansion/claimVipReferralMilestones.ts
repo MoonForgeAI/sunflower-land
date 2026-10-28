@@ -1,6 +1,5 @@
 import Decimal from "decimal.js-light";
 import { produce } from "immer";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import { getObjectEntries } from "lib/object";
 import type { GameState } from "features/game/types/game";
 import { VIP_REFERRAL_MILESTONES } from "features/game/lib/vipReferralMilestones";
@@ -69,9 +68,6 @@ export function claimVipReferralMilestones({
       });
     }
 
-    const coinsBefore = copy.coins;
-    const sflBefore = copy.balance.toNumber();
-
     if (sfl) {
       copy.balance = copy.balance.add(sfl);
     }
@@ -83,10 +79,5 @@ export function claimVipReferralMilestones({
     // Record the milestone as claimed (with the time it was claimed at) so it
     // cannot be claimed again.
     referrals.vipMilestonesClaimed = { ...claimed, [milestone]: createdAt };
-
-    mfCurrencyChange("vip_referral_milestone", "grant", {
-      coin: { before: coinsBefore, after: copy.coins },
-      sfl: { before: sflBefore, after: copy.balance.toNumber() },
-    });
   });
 }

@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import {
   type TreasureToolName,
   TREASURE_TOOLS,
@@ -197,7 +196,6 @@ export function craftTool({ state, action }: Options) {
     new Decimal(amount),
   );
 
-  const coinsBefore = stateCopy.coins;
   stateCopy.coins = stateCopy.coins - price;
   stateCopy.farmActivity = trackFarmActivity(
     "Coins Spent",
@@ -214,37 +212,6 @@ export function craftTool({ state, action }: Options) {
   if (stock !== undefined) {
     stateCopy.stock[action.tool] = stock.minus(amount);
   }
-
-  const craftInputs: { type: string; before?: number; after?: number }[] = [];
-  if (price > 0) {
-    craftInputs.push({
-      type: "Coin",
-      before: coinsBefore,
-      after: stateCopy.coins,
-    });
-  }
-  getObjectEntries(toolIngredients).forEach(
-    ([ingredientName, ingredientAmount]) => {
-      const spent = (ingredientAmount ?? new Decimal(0)).mul(amount);
-      const after = subtractedInventory[ingredientName] ?? new Decimal(0);
-      craftInputs.push({
-        type: ingredientName,
-        before: after.add(spent).toNumber(),
-        after: after.toNumber(),
-      });
-    },
-  );
-
-  mfEconomy("craft_tool", {
-    inputs: craftInputs.length > 0 ? craftInputs : undefined,
-    outputs: [
-      {
-        type: action.tool,
-        before: oldAmount.toNumber(),
-        after: oldAmount.add(amount).toNumber(),
-      },
-    ],
-  });
 
   return stateCopy;
 }

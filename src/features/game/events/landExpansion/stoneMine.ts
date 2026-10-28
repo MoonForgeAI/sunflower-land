@@ -39,7 +39,7 @@ import { produce } from "immer";
 import { STONE_RECOVERY_TIME } from "features/game/lib/constants";
 import { hasFeatureAccess } from "lib/flags";
 import { canMine, getMineReadyAt } from "features/game/lib/resourceNodes";
-import { mfEconomy } from "lib/moonforgeAnalytics";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type LandExpansionStoneMineAction = {
   type: "stoneRock.mined";
@@ -531,23 +531,9 @@ export function mineStone({
       ],
       createdAt,
     });
-    mfEconomy("mine_resource", {
-      inputs: new Decimal(requiredToolAmount).gt(0)
-        ? [
-            {
-              type: "Pickaxe",
-              before: toolAmount.toNumber(),
-              after: inventory.Pickaxe.toNumber(),
-            },
-          ]
-        : undefined,
-      outputs: [
-        {
-          type: "Stone",
-          before: amountInInventory.toNumber(),
-          after: inventory.Stone.toNumber(),
-        },
-      ],
+    mfTrack("resource_collected", {
+      resource_type: stoneName,
+      amount: stoneMined.toNumber(),
     });
 
     delete rock.stone.amount;

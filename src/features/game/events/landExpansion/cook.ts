@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfEconomy } from "lib/moonforgeAnalytics";
 import { v4 as uuidv4 } from "uuid";
 import {
   type CookableName,
@@ -322,8 +321,6 @@ export function cook({
 
     const { oilConsumed } = getCookingOilBoost(item, stateCopy, buildingId);
 
-    const inventoryBeforeCook = stateCopy.inventory;
-
     stateCopy.inventory = Object.entries(ingredients).reduce(
       (inventory, [ingredient, amount]) => {
         const count =
@@ -340,16 +337,6 @@ export function cook({
       },
       stateCopy.inventory,
     );
-
-    mfEconomy("cook_food", {
-      inputs: Object.entries(ingredients).map(([ingredient, amount]) => {
-        const before = (
-          inventoryBeforeCook[ingredient as InventoryItemName] ?? new Decimal(0)
-        ).toNumber();
-        return { type: ingredient, before, after: before - Number(amount) };
-      }),
-      outputs: [{ type: item }],
-    });
 
     if (isInstantFishRecipe(item)) {
       const { amount, boostsUsed } = getCookingAmount({

@@ -72,7 +72,7 @@ import {
 } from "features/game/types/bumpkinSkills";
 import { isAutumnCrop, isSummerCrop } from "./harvest";
 import { getKeys } from "lib/object";
-import { mfEconomy } from "lib/moonforgeAnalytics";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type LandExpansionPlantAction = {
   type: "seed.planted";
@@ -747,23 +747,14 @@ export function plant({
 
     stateCopy.aoe = aoe;
     plots[action.index] = updatedPlot;
-    const seedBefore = stateCopy.inventory[action.item] ?? new Decimal(0);
-    stateCopy.inventory[action.item] = seedBefore.sub(1);
+    stateCopy.inventory[action.item] = stateCopy.inventory[action.item]?.sub(1);
     stateCopy.boostsUsedAt = updateBoostUsed({
       game: stateCopy,
       boostNames: boostsUsed,
       createdAt,
     });
 
-    mfEconomy("plant_seed", {
-      inputs: [
-        {
-          type: action.item,
-          before: seedBefore.toNumber(),
-          after: stateCopy.inventory[action.item]?.toNumber() ?? 0,
-        },
-      ],
-    });
+    mfTrack("crop_planted", { crop_type: cropName });
 
     return stateCopy;
   });

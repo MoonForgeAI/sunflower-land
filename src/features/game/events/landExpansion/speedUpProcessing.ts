@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import type { ProcessingBuildingName } from "features/game/types/buildings";
 import type { BuildingProduct, GameState } from "features/game/types/game";
 import { produce } from "immer";
@@ -69,9 +68,6 @@ export const speedUpProcessing = ({
       game,
     });
 
-    const coinsBefore = game.coins;
-    const gemsBefore = (game.inventory["Gem"] ?? new Decimal(0)).toNumber();
-
     if (action.paymentMethod === "coins") {
       game = chargeCoinsForSpeedUp({ game, gems, createdAt });
     } else {
@@ -120,14 +116,6 @@ export const speedUpProcessing = ({
       isInstantReady: true,
       createdAt,
       game,
-    });
-
-    mfCurrencyChange("speed_up_processing", "spend", {
-      coin: { before: coinsBefore, after: game.coins },
-      gem: {
-        before: gemsBefore,
-        after: (game.inventory["Gem"] ?? new Decimal(0)).toNumber(),
-      },
     });
   });
 };

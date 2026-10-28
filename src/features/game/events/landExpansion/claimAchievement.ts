@@ -8,7 +8,7 @@ import type { GameState } from "features/game/types/game";
 import { onboardingAnalytics } from "lib/onboardingAnalytics";
 import { translate } from "lib/i18n/translate";
 import { produce } from "immer";
-import { mfCurrencyChange, mfTrack } from "lib/moonforgeAnalytics";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type ClaimAchievementAction = {
   type: "achievement.claimed";
@@ -42,7 +42,6 @@ export function claimAchievement({ state, action }: Options): GameState {
 
     bumpkin.achievements = { ...bumpkinAchievements, [action.achievement]: 1 };
 
-    const coinsBefore = stateCopy.coins;
     if (achievement.coins) {
       stateCopy.coins = stateCopy.coins + achievement.coins;
     }
@@ -62,9 +61,6 @@ export function claimAchievement({ state, action }: Options): GameState {
       achievement_id: action.achievement,
     });
     mfTrack("achievement_unlocked", { achievement_id: action.achievement });
-    mfCurrencyChange("achievement_reward", "grant", {
-      coin: { before: coinsBefore, after: stateCopy.coins },
-    });
 
     return stateCopy;
   });

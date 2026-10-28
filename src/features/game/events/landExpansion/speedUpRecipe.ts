@@ -1,5 +1,4 @@
 import Decimal from "decimal.js-light";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 import type {
   BuildingName,
   CookingBuildingName,
@@ -81,9 +80,6 @@ export function speedUpRecipe({
       game,
     });
 
-    const coinsBefore = game.coins;
-    const gemsBefore = (game.inventory["Gem"] ?? new Decimal(0)).toNumber();
-
     if (action.paymentMethod === "coins") {
       game = chargeCoinsForSpeedUp({ game, gems, createdAt });
     } else {
@@ -97,15 +93,6 @@ export function speedUpRecipe({
 
       game = makeGemHistory({ game, amount: gems, createdAt });
     }
-
-    mfCurrencyChange("speed_up_recipe", "spend", {
-      coin: { before: coinsBefore, after: game.coins },
-      gem: {
-        before: gemsBefore,
-        after: (game.inventory["Gem"] ?? new Decimal(0)).toNumber(),
-      },
-    });
-
     const cookableName = assertCookableName(recipe.name);
 
     const { amount, boostsUsed } = getCookingAmount({

@@ -2,7 +2,6 @@ import Decimal from "decimal.js-light";
 import { getObjectEntries } from "lib/object";
 import type { GameState } from "features/game/types/game";
 import { produce } from "immer";
-import { mfCurrencyChange } from "lib/moonforgeAnalytics";
 
 export type ClaimReferralRewardsAction = {
   type: "referral.rewardsClaimed";
@@ -46,9 +45,6 @@ export function claimReferralRewards({
       });
     }
 
-    const coinsBefore = copy.coins;
-    const sflBefore = copy.balance.toNumber();
-
     //   Add rewards to balance
     if (sfl) {
       copy.balance = copy.balance.add(sfl);
@@ -62,11 +58,6 @@ export function claimReferralRewards({
     //   Delete rewards
     delete copy.referrals?.rewards;
     delete copy.referrals?.totalUnclaimedReferrals;
-
-    mfCurrencyChange("referral_reward", "grant", {
-      coin: { before: coinsBefore, after: copy.coins },
-      sfl: { before: sflBefore, after: copy.balance.toNumber() },
-    });
 
     return copy;
   });
