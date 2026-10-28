@@ -1,4 +1,6 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { isBeetle } from "features/game/types/beetles";
+import { hasFeatureAccess } from "lib/flags";
 import { SUNNYSIDE } from "assets/sunnyside";
 import { GRID_WIDTH_PX, PIXEL_SCALE } from "features/game/lib/constants";
 import type { MachineState } from "features/game/lib/gameMachine";
@@ -16,7 +18,9 @@ import {
   getAnimalFavoriteFood,
   getAnimalLevel,
   getBoostedFoodQuantity,
-  isAnimalFood,
+  getFeedItem,
+  isFoodForAnimal,
+  getFeedQuantity,
   resolveAnimal,
 } from "features/game/lib/animals";
 import classNames from "classnames";
@@ -42,6 +46,7 @@ import Decimal from "decimal.js-light";
 import {
   getBarnDelightCost,
   handleFoodXP,
+  getFeedBatchSize,
   REQUIRED_FOOD_QTY,
 } from "features/game/events/landExpansion/feedAnimal";
 import { getAnimalXP } from "features/game/events/landExpansion/loveAnimal";
@@ -101,6 +106,8 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
   const [showNoMedicine, setShowNoMedicine] = useState(false);
   const [showLockedDetails, setShowLockedDetails] = useState(false);
   const [showFeedXP, setShowFeedXP] = useState(false);
+  // Captured when feeding: a level-up changes what the same feed is worth.
+  const [feedXPAmount, setFeedXPAmount] = useState(0);
   const [showLoveItem, setShowLoveItem] = useState<LoveAnimalItem>();
   const [showMutantAnimalModal, setShowMutantAnimalModal] = useState(false);
 
@@ -123,13 +130,16 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
   // animal) but can still be cured and sold to bounties.
   const isLocked = !isAnimalFeedable("barn", game, id);
 
-  const { foodQuantity: requiredFoodQty } = getBoostedFoodQuantity({
+  // One click feeds the whole batch that gets the Sheep ready.
+  const feedBatchSize = getFeedBatchSize({ state: game, animal: sheep });
+  const { foodQuantity: quantityPerFeed } = getBoostedFoodQuantity({
     animalType: "Sheep",
     foodQuantity: REQUIRED_FOOD_QTY.Sheep,
     game,
     animal: sheep,
     now,
   });
+  const requiredFoodQty = quantityPerFeed.mul(feedBatchSize);
 
   const hasGoldenSheep = isAnimalCoveredByGoldenAsset({
     state: game,
@@ -224,7 +234,11 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheep.state, sheep.experience]);
 
+  const hasBeetleFeedingAccess = hasFeatureAccess(game, "BEETLE_FEEDING");
+
   const feedSheep = (item?: InventoryItemName) => {
+    setFeedXPAmount(getAnimalXPEarned(item));
+
     const updatedState = gameService.send({
       type: "animal.fed",
       animal: "Sheep",
@@ -448,24 +462,42 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
       return;
     }
 
-    const hasFoodSelected = selectedItem && isAnimalFood(selectedItem);
-
     if (hasGoldenSheep) {
       feedSheep();
       return;
     }
 
+    // Auto-select the favourite food when it is held so a stale selection
+    // (e.g. Hay left over from the barn) never feeds the wrong item.
+    const feedItem = getFeedItem({
+      animal: "Sheep",
+      selectedItem,
+      favouriteFood: favFood,
+      inventory,
+      requiredQty: requiredFoodQty,
+      hasBeetleFeedingAccess,
+    });
+    if (feedItem && feedItem !== selectedItem) {
+      shortcutItem(feedItem);
+    }
+
+    // Without access a Beetle is not food here, so the click falls through to
+    // the no-food prompt instead of an event the reducer would reject.
+    const hasFoodSelected =
+      feedItem &&
+      (isFoodForAnimal("Sheep", feedItem) ||
+        (hasBeetleFeedingAccess && isBeetle(feedItem)));
+
     if (hasFoodSelected) {
-      const foodCount =
-        inventory[selectedItem as AnimalFoodName] ?? new Decimal(0);
-      if (foodCount.lt(requiredFoodQty)) {
+      const foodCount = inventory[feedItem as AnimalFoodName] ?? new Decimal(0);
+      if (foodCount.lt(getFeedQuantity(feedItem, requiredFoodQty))) {
         setShowNotEnoughFood(true);
         await new Promise((resolve) => setTimeout(resolve, 1000));
         setShowNotEnoughFood(false);
         return;
       }
 
-      feedSheep(selectedItem);
+      feedSheep(feedItem);
       return;
     }
 
@@ -476,18 +508,21 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
     if (showNoFoodSelected) return t("animal.noFoodMessage");
     if (showNoMedicine) return t("animal.noMedicine");
     if (showNotEnoughFood)
-      return t("animal.notEnoughFood", { amount: requiredFoodQty });
+      return t("animal.notEnoughFood", {
+        amount: getFeedQuantity(selectedItem, requiredFoodQty),
+      });
   };
 
-  const getAnimalXPEarned = () => {
+  const getAnimalXPEarned = (item?: InventoryItemName) => {
     const { foodXp } = handleFoodXP({
       state: game,
       animal: "Sheep",
       level,
-      food: hasGoldenSheep ? favFood : (selectedItem as AnimalFoodName),
+      food: hasGoldenSheep ? favFood : (item as AnimalFoodName),
     });
 
-    return foodXp;
+    // A Beetle is one per click; anything else is the whole batch.
+    return item && isBeetle(item) ? foodXp : foodXp * feedBatchSize;
   };
 
   const animalImageInfo = () => {
@@ -539,10 +574,12 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
   const level = getAnimalLevel(sheep.experience, "Sheep");
 
   const xpIndicatorColor =
-    favFood === selectedItem || selectedItem === "Omnifeed" || hasGoldenSheep
+    favFood === selectedItem ||
+    selectedItem === "Omnifeed" ||
+    (hasBeetleFeedingAccess && !!selectedItem && isBeetle(selectedItem)) ||
+    hasGoldenSheep
       ? "#71e358"
       : "#fff";
-  const xpIndicatorAmount = getAnimalXPEarned();
 
   const { animalXP } = getAnimalXP({
     state: game,
@@ -700,7 +737,7 @@ export const Sheep: React.FC<{ id: string; disabled: boolean }> = ({
               color: xpIndicatorColor,
             }}
           >
-            {!!xpIndicatorAmount && `+${xpIndicatorAmount}`}
+            {!!feedXPAmount && `+${feedXPAmount}`}
           </span>
         </Transition>
         <Transition

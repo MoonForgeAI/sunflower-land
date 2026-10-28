@@ -43,6 +43,7 @@ import { gameAnalytics } from "lib/gameAnalytics";
 import { Label } from "components/ui/Label";
 import { useAppTranslation } from "lib/i18n/useAppTranslations";
 import { SUNNYSIDE } from "assets/sunnyside";
+import { PIXEL_SCALE } from "features/game/lib/constants";
 import { FLOWER_SEEDS, type FlowerSeedName } from "features/game/types/flowers";
 import { getFlowerTime } from "features/game/events/landExpansion/plantFlower";
 import {
@@ -55,6 +56,7 @@ import { formatNumber, setPrecision } from "lib/utils/formatNumber";
 import { useVipAccess } from "lib/utils/hooks/useVipAccess";
 import { VIPAccess } from "features/game/components/VipAccess";
 import { ModalContext } from "features/game/components/modal/ModalProvider";
+import { isFirstSeedPurchase, needsFirstSeedPurchase } from "./lib/onboarding";
 import vipIcon from "assets/icons/vip.webp";
 
 import { Restock } from "./restock/Restock";
@@ -93,7 +95,7 @@ import {
 import {
   CHAPTER_CROP_WEEK,
   CHAPTER_CROP_WEEK_SEED,
-  isChapterCropWeekActive,
+  hasChapterCropWeekAccess,
 } from "features/game/types/chapterCropWeek";
 import { hasUpgradedChapterCropWeekSkill } from "features/game/types/bumpkinSkills";
 
@@ -107,7 +109,7 @@ export const SEASON_ICONS: Record<TemperateSeasonName, string> = {
 const _state = (state: MachineState) => state.context.state;
 
 export const SeasonalSeeds: React.FC = () => {
-  const { gameService, shortcutItem, showActualTime } = useContext(Context);
+  const { gameService, shortcutItem } = useContext(Context);
   const { openModal } = useContext(ModalContext);
   const state = useSelector(gameService, _state);
   const { inventory, coins, island, bumpkin, season } = state;
@@ -120,12 +122,16 @@ export const SeasonalSeeds: React.FC = () => {
   );
 
   const now = useNow({ live: true, intervalMs: PRE_ACTION_TICK_MS });
-  const isCropWeek = isChapterCropWeekActive(now);
+  const isCropWeek = hasChapterCropWeekAccess(state, now);
 
   const [selectedName, setSelectedName] = useState<SeedName>(
     currentSeasonSeeds[0],
   );
   const [confirmBuyModal, showConfirmBuyModal] = useState(false);
+
+  // Tutorial: point a new player at their first batch of Sunflower Seeds.
+  const showBuyHelper =
+    selectedName === "Sunflower Seed" && needsFirstSeedPurchase(state);
   const [confirmBuyAllModal, showConfirmBuyAllModal] = useState(false);
   const [buyAllFailures, setBuyAllFailures] = useState<SeedName[]>([]);
 
@@ -142,17 +148,30 @@ export const SeasonalSeeds: React.FC = () => {
   };
 
   const buy = (amount = 1) => {
-    const state = gameService.send("seed.bought", {
+    const before = gameService.getSnapshot().context.state;
+    const isFirstPurchase = isFirstSeedPurchase(before);
+    const isFirstSunflowerSeedPurchase =
+      selectedName === "Sunflower Seed" &&
+      !before.farmActivity?.["Sunflower Seed Bought"];
+
+    gameService.send("seed.bought", {
       item: selectedName,
       amount,
     });
 
     shortcutItem(selectedName);
 
-    if (state.context.state.farmActivity?.["Sunflower Seed Bought"] === 1) {
+    // "Sunflower Seed Bought" counts units, not purchases, so compare against
+    // the state before the purchase rather than checking for a total of 1.
+    if (isFirstSunflowerSeedPurchase) {
       gameAnalytics.trackMilestone({
         event: "Tutorial:SunflowerSeedBought:Completed",
       });
+    }
+
+    // Tutorial: seeds in hand, Betty sends the player back to their plots.
+    if (isFirstPurchase) {
+      openModal("BETTY_PLANT");
     }
   };
 
@@ -232,9 +251,22 @@ export const SeasonalSeeds: React.FC = () => {
             {t("buy")} {"1"}
           </Button>
           {bulkSeedBuyAmount > 10 && (
-            <Button disabled={lessFunds(10)} onClick={() => buy(10)}>
-              {t("buy")} {`10`}
-            </Button>
+            <div className="relative w-full">
+              <Button disabled={lessFunds(10)} onClick={() => buy(10)}>
+                {t("buy")} {`10`}
+              </Button>
+              {showBuyHelper && (
+                <img
+                  className="absolute pointer-events-none z-30 animate-pulsate"
+                  src={SUNNYSIDE.icons.click_icon}
+                  style={{
+                    width: `${PIXEL_SCALE * 18}px`,
+                    right: `${PIXEL_SCALE * -4}px`,
+                    top: `${PIXEL_SCALE * 2}px`,
+                  }}
+                />
+              )}
+            </div>
           )}
           {bulkSeedBuyAmount > 1 && bulkSeedBuyAmount <= 10 && (
             <Button
@@ -349,34 +381,30 @@ export const SeasonalSeeds: React.FC = () => {
 
   const baseTime = getBasePlantSeconds();
 
-  // A live speed window isn't folded into the grow time — show the rate, or (in
-  // the actual-time view) the real "plant now → ready in X", which credits only
-  // the part of the grow the booster still covers.
+  // A live speed window isn't folded into the grow time — project the real
+  // "plant now → ready in X", which credits only the part of the grow the
+  // booster still covers.
   const plantTime = getPlantSeconds();
   // The windowed boosters aren't in `boostsUsed` (they apply over the grow rather
-  // than being baked into it), so name them for the boost panel: their rate in
-  // the speed view, the time each one actually saves in the other.
+  // than being baked into it), so name them for the boost panel with the time
+  // each one actually saves.
   const plantBoostsUsed = [
     ...plantTime.boostsUsed,
     ...getBoostContributionEntries({
       contributions: getSeedBoostContributions(state, selectedName, now),
       seconds: plantTime.seconds,
       at: now,
-      showActualTime,
       formatSeconds: (seconds) =>
         secondsToString(seconds, { length: "medium" }),
-      formatSpeed: (speed) => t("description.boostedSpeed", { speed }),
     }),
   ];
-  const { displaySeconds: plantDisplaySeconds, speed: plantSpeed } =
-    getPreActionDisplay({
-      showActualTime,
-      seconds: plantTime.seconds,
-      baseSeconds: baseTime,
-      namedBoostCount: plantBoostsUsed.length,
-      windows: getSeedBoostWindows(state, selectedName),
-      at: now,
-    });
+  const { displaySeconds: plantDisplaySeconds } = getPreActionDisplay({
+    seconds: plantTime.seconds,
+    baseSeconds: baseTime,
+    namedBoostCount: plantBoostsUsed.length,
+    windows: getSeedBoostWindows(state, selectedName),
+    at: now,
+  });
 
   const getHarvestCount = () => {
     if (!yields) return undefined;
@@ -454,6 +482,10 @@ export const SeasonalSeeds: React.FC = () => {
 
   const buyAllSeeds = () => {
     const failures: SeedName[] = [];
+    const before = gameService.getSnapshot().context.state;
+    const isFirstPurchase = isFirstSeedPurchase(before);
+    const hadBoughtSunflowerSeeds =
+      !!before.farmActivity?.["Sunflower Seed Bought"];
 
     buyAllPlan.purchases.forEach(({ seedName, amount }) => {
       try {
@@ -469,6 +501,20 @@ export const SeasonalSeeds: React.FC = () => {
 
     setBuyAllFailures(failures);
     showConfirmBuyAllModal(false);
+
+    if (isFirstPurchase && failures.length < buyAllPlan.purchases.length) {
+      openModal("BETTY_PLANT");
+    }
+
+    const boughtSunflowerSeeds =
+      !!gameService.getSnapshot().context.state.farmActivity?.[
+        "Sunflower Seed Bought"
+      ];
+    if (!hadBoughtSunflowerSeeds && boughtSunflowerSeeds) {
+      gameAnalytics.trackMilestone({
+        event: "Tutorial:SunflowerSeedBought:Completed",
+      });
+    }
   };
 
   const harvestCount = getHarvestCount();
@@ -511,7 +557,6 @@ export const SeasonalSeeds: React.FC = () => {
               boostsUsed: plantBoostsUsed,
             },
             baseTimeSeconds: baseTime,
-            timeSpeed: plantSpeed,
             restriction: {
               icon: SEASON_ICONS[currentSeason],
               text: plantingSpot,

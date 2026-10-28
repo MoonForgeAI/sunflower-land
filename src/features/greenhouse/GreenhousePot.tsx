@@ -177,11 +177,20 @@ export const GreenhousePot: React.FC<Props> = ({ id }) => {
       ]
     : [];
   const baseDurationMs = growingPlant?.baseDurationMs;
-  // Work banked across Greenhouse building moves — folded into the bar's total
-  // so visual progress is preserved (readiness already accounts for it).
-  const bankedWorkMs = growingPlant?.boostedTime ?? 0;
+  // `boostedTime` carries a different quantity in each model, so split it here:
+  // - windowed: WORK banked across Greenhouse building moves, folded into the
+  //   bar's total so visual progress is preserved (readiness already accounts
+  //   for it).
+  // - legacy: the DISCOUNT baked in by back-dating `plantedAt` (plant time +
+  //   any mid-grow Greenhouse Glow). It is not growth already done, so the bar
+  //   has to un-back-date with it — otherwise a heavily boosted plant opens its
+  //   bar near-full and only ever fills the last sliver. Mirrors FertilePlot.
+  const bankedWorkMs =
+    baseDurationMs !== undefined ? (growingPlant?.boostedTime ?? 0) : 0;
+  const legacyOffsetMs =
+    baseDurationMs === undefined ? (growingPlant?.boostedTime ?? 0) : 0;
 
-  const { now, speed, workLeftSeconds, displaySeconds } = useNodeTimer({
+  const { now, workLeftSeconds, countdownSeconds } = useNodeTimer({
     startedAt: plantedAt,
     baseDurationMs,
     windows: boostWindows,
@@ -190,22 +199,21 @@ export const GreenhousePot: React.FC<Props> = ({ id }) => {
   });
 
   // Remaining WORK — drives the progress fill and the "is it still growing"
-  // gates below, so neither moves when the player switches reading.
+  // gates below; work does not drain at wall-clock rate while a boost runs.
   const secondsLeft =
     readyAt > 0 || baseDurationMs !== undefined
       ? Math.max(Math.ceil(workLeftSeconds), 0)
       : 0;
-  // The reading the player has chosen, for the labels.
-  const displaySecondsLeft = Math.max(Math.ceil(displaySeconds), 0);
+  // The wall-clock reading, for the labels.
+  const displaySecondsLeft = Math.max(Math.ceil(countdownSeconds), 0);
   const totalSeconds =
     baseDurationMs !== undefined
       ? (baseDurationMs + bankedWorkMs) / 1000
-      : Math.max((readyAt - plantedAt) / 1000, 0);
+      : Math.max((readyAt - plantedAt - legacyOffsetMs) / 1000, 0);
   const percentage =
     totalSeconds > 0
       ? clampPercentage(((totalSeconds - secondsLeft) / totalSeconds) * 100)
       : 100;
-  const isBoosted = speed > 1;
 
   const { usage: oilRequired } = getOilUsage({
     seed: selectedItem as GreenHouseCropSeedName,
@@ -398,19 +406,6 @@ export const GreenhousePot: React.FC<Props> = ({ id }) => {
         style={{ width: `${PIXEL_SCALE * 28}px` }}
         onClick={harvest}
       />
-      {secondsLeft > 0 && isBoosted && (
-        <img
-          src={SUNNYSIDE.icons.lightning}
-          alt=""
-          aria-hidden
-          className="absolute z-20 pointer-events-none animate-pulse"
-          style={{
-            width: `${PIXEL_SCALE * 7}px`,
-            top: `${PIXEL_SCALE * 1}px`,
-            right: `${PIXEL_SCALE * 3}px`,
-          }}
-        />
-      )}
       {showTimers && secondsLeft > 0 && (
         <div
           className="absolute pointer-events-none"
@@ -447,7 +442,6 @@ export const GreenhousePot: React.FC<Props> = ({ id }) => {
           description={getTranslatedItemName(pot.plant.name)}
           showPopover={showTimeRemaining && !canApplyGreenhouseFertiliser()}
           timeLeft={displaySecondsLeft}
-          speed={speed}
         />
       </Transition>
     </div>

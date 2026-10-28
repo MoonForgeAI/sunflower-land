@@ -932,6 +932,20 @@ export const BUMPKIN_ITEM_BUFF_LABELS: Partial<
       boostedItemIcon: ITEM_DETAILS["Rapid Root"].image,
     },
   ],
+  "Duende Hat": [
+    {
+      shortDescription: translate("description.duendeHat.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Crop Plot"].image,
+    },
+    {
+      shortDescription: translate("description.duendeHat.boost.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Fruit Patch"].image,
+    },
+  ],
   "Lava Swimwear": [
     {
       shortDescription: translate("bumpkinItemBuff.lava.swimwear.boost"),
@@ -1157,7 +1171,7 @@ export const BUMPKIN_ITEM_BUFF_LABELS: Partial<
         const translationKey =
           `description.bonus${ticket.replace(/\s+/g, "")}.boost` as TranslationKeys;
 
-        return Object.values(items)
+        return Object.values(items ?? {})
           .filter((item) => !isCollectible(item))
           .map((item) => [
             item,

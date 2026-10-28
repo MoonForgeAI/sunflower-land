@@ -1,6 +1,7 @@
 import React, { useContext, useState } from "react";
 
 import worldMap from "assets/map/world_map.png";
+import halloween2026WorldMap from "assets/map/halloween_2026_world_map.png";
 
 import { Context } from "features/game/GameProvider";
 import { useAppTranslation } from "lib/i18n/useAppTranslations";
@@ -15,6 +16,8 @@ import {
 import { Label } from "components/ui/Label";
 import { isMobile } from "mobile-device-detect";
 import { useSelector } from "@xstate/react";
+import { useTimeBasedFeatureAccess } from "lib/utils/hooks/useTimeBasedFeatureAccess";
+import { hasPlazaAccess } from "features/island/delivery/lib/onboarding";
 
 const showDebugBorders = false;
 
@@ -37,8 +40,14 @@ export const WorldMap: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   });
   const hasLevel = (level: number) =>
     meetsLevelRequirement(ascension, { ascension: 0, level });
+  // The plaza opens early for tutorial players with Sunflowers to deliver
+  const plazaAccess = hasPlazaAccess(state);
   const hasFaction = state.faction;
   const canTeleportToFactionHouse = hasLevel(7) && hasFaction;
+  const isHalloween2026EventActive = useTimeBasedFeatureAccess({
+    featureName: "HALLOWEEN_2026_EVENT_FLAG",
+    game: state,
+  });
 
   const getFactionHouseRoute = () => {
     switch (hasFaction?.name) {
@@ -57,9 +66,12 @@ export const WorldMap: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <OuterPanel className="w-full relative shadow-xl">
-      <img src={worldMap} className="w-full" />
+      <img
+        src={isHalloween2026EventActive ? halloween2026WorldMap : worldMap}
+        className="w-full"
+      />
 
-      {!hasLevel(2) && (
+      {!plazaAccess && (
         <Label
           type="danger"
           className="absolute bottom-2"
@@ -172,16 +184,16 @@ export const WorldMap: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           bottom: "20%",
         }}
         className={`flex justify-center items-center ${
-          hasLevel(2) ? "cursor-pointer" : "cursor-not-allowed"
+          plazaAccess ? "cursor-pointer" : "cursor-not-allowed"
         }`}
         onClick={() => {
-          if (!hasLevel(2)) return;
+          if (!plazaAccess) return;
           travel.play();
           navigate("/world/plaza");
           onClose();
         }}
       >
-        {!hasLevel(2) ? (
+        {!plazaAccess ? (
           isMobile ? (
             <img
               src={SUNNYSIDE.icons.lock}
@@ -454,6 +466,55 @@ export const WorldMap: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </span>
         )}
       </div>
+      {isHalloween2026EventActive && (
+        <div
+          style={{
+            width: "35%",
+            height: "14%",
+            border: showDebugBorders ? "2px solid red" : "",
+            position: "absolute",
+            right: "30%",
+            bottom: "3%",
+          }}
+          className={`flex justify-center items-center ${
+            hasLevel(2) ? "cursor-pointer" : "cursor-not-allowed"
+          }`}
+          onClick={() => {
+            if (!hasLevel(2)) return;
+            travel.play();
+            navigate("/world/halloween_island_2026");
+            onClose();
+          }}
+        >
+          {!hasLevel(2) ? (
+            isMobile ? (
+              <img
+                src={SUNNYSIDE.icons.lock}
+                className="h-4 sm:h-6 ml-1 img-highlight"
+                onClick={() => {
+                  setShowPopup(true);
+                  setReqLvl(2);
+                  setTimeout(() => {
+                    setShowPopup(false);
+                  }, 1300);
+                }}
+              />
+            ) : (
+              <Label
+                type="default"
+                icon={SUNNYSIDE.icons.lock}
+                className="text-sm"
+              >
+                {t("world.lvl.requirement", { lvl: 2 })}
+              </Label>
+            )
+          ) : (
+            <span className="map-text text-xxs sm:text-sm">
+              {"Halloween Event"}
+            </span>
+          )}
+        </div>
+      )}
 
       {showPopup && (
         <Label

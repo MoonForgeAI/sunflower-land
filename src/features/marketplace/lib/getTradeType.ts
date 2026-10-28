@@ -2,6 +2,10 @@ import { KNOWN_ITEMS } from "features/game/types";
 import { type BumpkinItem, ITEM_NAMES } from "features/game/types/bumpkin";
 import type { InventoryItemName } from "features/game/types/game";
 import type { CollectionName } from "features/game/types/marketplace";
+import {
+  RARECROW_NAMES,
+  type RarecrowName,
+} from "features/game/types/rarecrows";
 
 export type TradeType = "instant" | "onchain";
 
@@ -190,6 +194,9 @@ export const ITEM_TRADE_TYPES: {
     "Saltwort Seed": "instant",
     Saltwort: "instant",
     Saltbite: "instant",
+    "Crystal Leaf Seed": "instant",
+    "Crystal Leaf": "instant",
+    "Crystal Cookie": "instant",
 
     "Thermal Stone": "instant",
     "Protective Pesticide": "instant",
@@ -314,7 +321,7 @@ export const ITEM_TRADE_TYPES: {
     Pickaxe: "instant",
     "Stone Pickaxe": "instant",
     "Iron Pickaxe": "instant",
-    Hammer: "onchain",
+    Hammer: "instant",
     Rod: "instant",
     "Rusty Shovel": "instant",
     Shovel: "instant",
@@ -525,7 +532,7 @@ export const ITEM_TRADE_TYPES: {
     Honey: "instant",
     "Wild Mushroom": "instant",
     "Magic Mushroom": "instant",
-    Diamond: "onchain",
+    Diamond: "instant",
     Tree: "instant",
     "Stone Rock": "instant",
     "Fused Stone Rock": "instant",
@@ -534,7 +541,7 @@ export const ITEM_TRADE_TYPES: {
     "Gold Rock": "instant",
     "Crop Plot": "instant",
     "Fruit Patch": "instant",
-    Boulder: "onchain",
+    Boulder: "instant",
     "Basic Land": "instant",
     Earthworm: "instant",
     Grub: "instant",
@@ -583,6 +590,14 @@ export const ITEM_TRADE_TYPES: {
     "Royal Bedding": "instant",
     "Royal Ornament": "instant",
     Omnifeed: "instant",
+    "Basic Slop": "instant",
+    "Hearty Slop": "instant",
+    "Rich Slop": "instant",
+    "Gourmet Slop": "instant",
+    "Ember-Roasted Truffle Potatoes": "instant",
+    "Truffle Cake": "instant",
+    "Creamy Truffle Risotto": "instant",
+    "Truffle Seasoning": "instant",
     "Green Thumb": "instant",
     "Barn Manager": "instant",
     "Seed Specialist": "instant",
@@ -743,6 +758,8 @@ export const ITEM_TRADE_TYPES: {
     Greenhouse: "instant",
     "Crop Machine": "instant",
     Barn: "instant",
+    Pigpen: "instant",
+    Cave: "instant",
     "Crafting Box": "instant",
     "Pet House": "instant",
     "Chef Apron": "onchain",
@@ -1454,6 +1471,32 @@ export const ITEM_TRADE_TYPES: {
     "Cloud Bed": "instant",
     "Ascension Monument": "instant",
 
+    // Cave Dwellers marvel fish + tickets + banner + artefact
+    Manatee: "instant",
+    Betta: "instant",
+    Macropinna: "instant",
+    "Beetle Wing": "instant",
+    "Cave Dwellers Raffle Ticket": "instant",
+    "Cave Dwellers Banner": "instant",
+    "Clover Coin": "instant",
+
+    // Cave Dwellers mutants, monument, bed + decorations
+    "Mushroom Chicken": "instant",
+    "Ladybug Cow": "instant",
+    "Beetle Sheep": "instant",
+    "Cyclops Bloom": "instant",
+    "Duende Monument": "instant",
+    "Miner's Bed": "instant",
+    "Giant Truffle": "onchain",
+    "Mining Drill": "instant",
+    "Piggy Bank": "onchain",
+    "Straw House": "instant",
+    "Stick House": "onchain",
+    "Brick House": "onchain",
+    "Big Bad Wolf": "onchain",
+    "Pig Plush": "instant",
+    "Pig Doll": "instant",
+
     // Ascension Age decorations
     "Salt Rug": "onchain",
     "Ascended Idol": "onchain",
@@ -1530,9 +1573,45 @@ export const ITEM_TRADE_TYPES: {
     "Letter X Tile": "instant",
     "Letter Y Tile": "instant",
     "Letter Z Tile": "instant",
+
+    //Halloween 2026 event
+    "Halloween Token 2026": "instant",
+    "Halloween Ticket 2026": "instant",
+    "Corrupted Pumpkin": "instant",
+    "Huge Jack-o'-lantern": "instant",
+    "Haunted TV": "instant",
+    "Zombie Hand Toy": "instant",
+    "Cool Zombie Tombstone": "instant",
+    "Destroyed Sign": "instant",
+    "Skull Candles": "instant",
+    "Plague Crow": "instant",
+    "Skeleton Crow": "instant",
+    "Witch Crow": "instant",
+    "Fisherbird Crow": "instant",
+    "Chained Crow": "instant",
+    "Count Vlad Crow": "instant",
+    "Lual Crow": "instant",
+    "King Crow": "instant",
+    "Devil Crow": "instant",
+    "Pharaoh Crow": "instant",
+    "Cultist Crow": "instant",
+
     "Champion Rarecrow": "instant",
     "OG Rarecrow": "instant",
     "Loyal Rarecrow": "instant",
+    ...RARECROW_NAMES.reduce(
+      (acc, name) => ({ ...acc, [name]: "instant" as TradeType }),
+      {} as Record<RarecrowName, TradeType>,
+    ),
+
+    // Chapter 16 resources
+    "Green Beetle": "instant",
+    "Blue Beetle": "instant",
+    "Pink Beetle": "instant",
+    "Amber Beetle": "instant",
+    Mud: "instant",
+    "Pig Bristles": "instant",
+    Truffle: "instant",
   },
   wearables: {
     "Walrus Onesie": "instant",
@@ -2122,6 +2201,29 @@ export const ITEM_TRADE_TYPES: {
     "Marble Pants": "instant",
     "Spooky Coat": "instant",
     "Surfer Hair": "onchain",
+
+    //Halloween 2026 event
+    "Vampire Garments": "instant",
+    "Vampire Breeches": "instant",
+    "Hook and Chain": "instant",
+    "Vampire Footwear": "instant",
+    "Vampire Headwear": "instant",
+    "Butcher Knife": "instant",
+    "Skeleton Mask": "instant",
+    "Scary Nights Background": "instant",
+    "Skeleton Costume": "instant",
+    "Sky Tearer Wings": "instant",
+    "Bat Aura": "instant",
+    "Traveling Merchant Suit": "instant",
+    "Traveling Merchant Bag": "instant",
+    "Beetle Goggles": "instant",
+    "Duende Hat": "instant",
+    "Duende Shirt": "instant",
+    "Duende Pants": "instant",
+    "Duende Shoes": "instant",
+    "Hercules Beetle Hat": "onchain",
+    "Pig Onesie": "instant",
+    "Firefly Aura": "onchain",
   },
 };
 
